@@ -4,7 +4,7 @@ import { Plus, Trash2, Settings, Globe, Briefcase, Tag, AlertCircle } from 'luci
 
 interface Setting {
   id: number;
-  category: 'country' | 'title' | 'keyword';
+  type: 'country' | 'title' | 'keyword';
   value: string;
 }
 
@@ -58,7 +58,7 @@ const AdminSettings: React.FC = () => {
   };
 
   const SettingGroup = ({ type, icon: Icon, title, colorClass }: { type: string, icon: any, title: string, colorClass: string }) => {
-    const groupItems = settings.filter(s => s.category === type);
+    const groupItems = settings.filter(s => s.type === type);
 
     return (
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">

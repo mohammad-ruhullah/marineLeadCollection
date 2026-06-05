@@ -158,7 +158,7 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading }) => {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
-                    {new Date(lead.date_added).toLocaleDateString()}
+                    {lead.date_added ? new Date(lead.date_added).toLocaleDateString() : 'N/A'}
                   </td>
                 </tr>
               ))}

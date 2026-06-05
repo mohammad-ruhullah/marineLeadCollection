@@ -9,6 +9,7 @@ import { Search, Database, Users, LayoutGrid, List, Settings } from 'lucide-reac
 
 function App() {
   const [filters, setFilters] = useState<any>({});
+  console.log('App rendering, filters:', filters);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [totalEntries, setTotalEntries] = useState(0);
   const [isCalculating, setIsCalculating] = useState(false);
@@ -18,6 +19,7 @@ function App() {
   const [leads, setLeads] = useState<any[]>([]);
   const [leadsLoading, setLeadsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'search' | 'leads' | 'admin'>('search');
+  console.log('App rendering, activeTab:', activeTab);
   const [settingsKey, setSettingsKey] = useState(0); // Used to force refresh FilterSidebar
 
   const fetchLeads = async () => {
