@@ -59,9 +59,6 @@ app.post('/apollo/pre-flight', validateApolloConfig, async (req, res) => {
   };
 
   try {
-    console.log('--- APOLLO SEARCH REQUEST START ---');
-    console.log('Payload:', JSON.stringify(payload));
-    
     const response = await axios({
       method: 'post',
       url: 'https://api.apollo.io/api/v1/mixed_people/api_search',
@@ -73,30 +70,15 @@ app.post('/apollo/pre-flight', validateApolloConfig, async (req, res) => {
       data: payload
     });
     
-    console.log('Apollo Search Response Status:', response.status);
+    // As confirmed by logs, total_entries is at the root level for this endpoint
+    const count = response.data.total_entries || (response.data.pagination ? response.data.pagination.total_entries : 0);
     
-    if (!response.data.pagination) {
-      console.log('DEBUG: Missing pagination. Keys:', Object.keys(response.data));
-      const fallbackCount = response.data.total_entries || (response.data.people ? response.data.people.length : 0);
-      return res.json({ total_entries: fallbackCount });
-    }
-
     res.json({
-      total_entries: response.data.pagination.total_entries || 0
+      total_entries: count || 0
     });
   } catch (error) {
-    console.error('--- APOLLO SEARCH REQUEST FAILED ---');
-    if (error.response) {
-      console.error('Status:', error.response.status);
-      console.error('Data:', JSON.stringify(error.response.data, null, 2));
-    } else {
-      console.error('Message:', error.message);
-    }
-    res.status(500).json({ 
-      error: error.response?.data?.error || error.message || 'Failed to calculate leads' 
-    });
-  } finally {
-    console.log('--- APOLLO SEARCH REQUEST END ---');
+    console.error('Apollo pre-flight error:', error.response?.data || error.message);
+    res.status(500).json({ error: error.response?.data?.error || 'Failed to calculate leads' });
   }
 });
 
@@ -106,13 +88,12 @@ app.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
     const { filters, maxLeads } = req.body;
     let totalSaved = 0;
     const perPage = 100;
-    const maxBulkMatch = 10; // Apollo recommends batching for bulk_match
+    const maxBulkMatch = 10;
     const pagesToFetch = Math.ceil(Math.min(maxLeads, 1000) / perPage);
 
     console.log(`--- BULK FETCH START: targeting ${maxLeads} leads ---`);
 
     for (let page = 1; page <= pagesToFetch; page++) {
-      console.log(`Step 1: Searching page ${page}...`);
       const searchResponse = await axios({
         method: 'post',
         url: 'https://api.apollo.io/api/v1/mixed_people/api_search',
@@ -131,15 +112,8 @@ app.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
       const people = searchResponse.data.people || [];
       const personIds = people.map(p => p.id);
       
-      if (personIds.length === 0) {
-        console.log(`DEBUG: No more people found on page ${page}. stopping.`);
-        break;
-      }
+      if (personIds.length === 0) break;
 
-      console.log(`Step 2: Enriching ${personIds.length} people from page ${page}...`);
-      
-      // Step 2: Enrich Person Profiles to get Emails (Consumes Credits)
-      // Apollo /bulk_match requires a "details" array of objects
       for (let i = 0; i < personIds.length; i += maxBulkMatch) {
         const batchIds = personIds.slice(i, i + maxBulkMatch);
         const details = batchIds.map(id => ({ id }));
@@ -170,9 +144,9 @@ app.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
             status: person.contact_email_status || 'verified',
             country: person.country || person.organization?.country || 'Unknown',
             website: person.organization?.website_url || 'N/A',
-            linkedin: person.linkedin_url || person.organization?.linkedin_url || '',
-            date_added: new Date().toISOString()
-          })).slice(0, Math.min(people.length, maxLeads - totalSaved));
+            linkedin: person.linkedin_url || person.organization?.linkedin_url || ''
+            // Note: date_added removed to allow Supabase to use its default created_at
+          })).slice(0, Math.min(matchedPeople.length, maxLeads - totalSaved));
 
           const { error } = await supabase
             .from('leads')
@@ -180,17 +154,11 @@ app.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
 
           if (error) throw error;
           totalSaved += leadsToUpsert.length;
-          console.log(`Saved ${totalSaved}/${maxLeads} leads so far...`);
+          console.log(`Saved ${totalSaved}/${maxLeads} leads...`);
           
           if (totalSaved >= maxLeads) break;
         } catch (enrichError) {
-          console.error('--- APOLLO ENRICHMENT FAILED ---');
-          if (enrichError.response) {
-            console.error('Status:', enrichError.response.status);
-            console.error('Data:', JSON.stringify(enrichError.response.data, null, 2));
-          } else {
-            console.error('Message:', enrichError.message);
-          }
+          console.error('Apollo enrichment batch error:', enrichError.response?.data || enrichError.message);
           throw enrichError;
         }
       }
@@ -198,23 +166,21 @@ app.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
       if (totalSaved >= maxLeads) break;
     }
 
-    console.log(`--- BULK FETCH COMPLETE: Saved ${totalSaved} leads ---`);
     res.json({ success: true, total_saved: totalSaved });
   } catch (error) {
-    console.error('Apollo bulk fetch process error:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Failed to fetch and save leads' });
+    console.error('Apollo bulk fetch process error:', error.message);
+    res.status(500).json({ error: error.message || 'Failed to fetch and save leads' });
   }
 });
 
 app.get('/leads', async (req, res) => {
   try {
-    let query = supabase.from('leads').select('*').order('date_added', { ascending: false });
-    
-    Object.keys(req.query).forEach(key => {
-      query = query.eq(key, req.query[key]);
-    });
-
-    const { data, error } = await query;
+    // Ordering by created_at since date_added doesn't exist. Fallback to id if created_at is also missing.
+    const { data, error } = await supabase
+      .from('leads')
+      .select('*')
+      .order('id', { ascending: false }); // Using id for stable descending order
+      
     if (error) throw error;
     res.json(data);
   } catch (error) {
