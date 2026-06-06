@@ -29,7 +29,7 @@ app.get('/apollo/credits', validateApolloConfig, async (req, res) => {
   try {
     const response = await axios({
       method: 'get',
-      url: 'https://api.apollo.io/v1/auth/health',
+      url: 'https://api.apollo.io/api/v1/auth/health',
       headers: { 
         'X-Api-Key': APOLLO_API_KEY,
         'Content-Type': 'application/json',
@@ -56,7 +56,7 @@ app.post('/apollo/pre-flight', validateApolloConfig, async (req, res) => {
     
     const response = await axios({
       method: 'post',
-      url: 'https://api.apollo.io/v1/mixed_people/api_search',
+      url: 'https://api.apollo.io/api/v1/mixed_people/api_search',
       headers: { 
         'X-Api-Key': APOLLO_API_KEY,
         'Content-Type': 'application/json',
@@ -85,13 +85,14 @@ app.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
     const { filters, maxLeads } = req.body;
     let totalSaved = 0;
     const perPage = 100;
+    const maxBulkMatch = 10; // Apollo recommends batching for bulk_match
     const pagesToFetch = Math.ceil(Math.min(maxLeads, 1000) / perPage);
 
     for (let page = 1; page <= pagesToFetch; page++) {
       // Step 1: Search for Person IDs (Free)
       const searchResponse = await axios({
         method: 'post',
-        url: 'https://api.apollo.io/v1/mixed_people/api_search',
+        url: 'https://api.apollo.io/api/v1/mixed_people/api_search',
         headers: { 
           'X-Api-Key': APOLLO_API_KEY,
           'Content-Type': 'application/json'
@@ -108,41 +109,48 @@ app.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
       if (personIds.length === 0) break;
 
       // Step 2: Enrich Person Profiles to get Emails (Consumes Credits)
-      const enrichResponse = await axios({
-        method: 'post',
-        url: 'https://api.apollo.io/v1/people/bulk_match',
-        headers: { 
-          'X-Api-Key': APOLLO_API_KEY,
-          'Content-Type': 'application/json'
-        },
-        data: {
-          ids: personIds,
-          reveal_personal_emails: true
-        }
-      });
+      // Apollo /bulk_match works best with smaller batches (10-100)
+      for (let i = 0; i < personIds.length; i += maxBulkMatch) {
+        const batchIds = personIds.slice(i, i + maxBulkMatch);
+        
+        const enrichResponse = await axios({
+          method: 'post',
+          url: 'https://api.apollo.io/api/v1/people/bulk_match',
+          headers: { 
+            'X-Api-Key': APOLLO_API_KEY,
+            'Content-Type': 'application/json'
+          },
+          data: {
+            ids: batchIds,
+            reveal_personal_emails: true
+          }
+        });
 
-      const people = enrichResponse.data.matches || enrichResponse.data.people || [];
-      if (people.length === 0) break;
+        const people = enrichResponse.data.matches || enrichResponse.data.people || [];
+        if (people.length === 0) continue;
 
-      const leadsToUpsert = people.map(person => ({
-        apollo_id: person.id,
-        company: person.organization?.name || 'Unknown',
-        contact_name: person.name,
-        title: person.title,
-        email: person.email,
-        status: person.contact_email_status || 'verified',
-        country: person.country || person.organization?.country || 'Unknown',
-        website: person.organization?.website_url || 'N/A',
-        linkedin: person.linkedin_url || person.organization?.linkedin_url || '',
-        date_added: new Date().toISOString()
-      })).slice(0, Math.min(people.length, maxLeads - totalSaved));
+        const leadsToUpsert = people.map(person => ({
+          apollo_id: person.id,
+          company: person.organization?.name || 'Unknown',
+          contact_name: person.name,
+          title: person.title,
+          email: person.email,
+          status: person.contact_email_status || 'verified',
+          country: person.country || person.organization?.country || 'Unknown',
+          website: person.organization?.website_url || 'N/A',
+          linkedin: person.linkedin_url || person.organization?.linkedin_url || '',
+          date_added: new Date().toISOString()
+        })).slice(0, Math.min(people.length, maxLeads - totalSaved));
 
-      const { error } = await supabase
-        .from('leads')
-        .upsert(leadsToUpsert, { onConflict: 'apollo_id' });
+        const { error } = await supabase
+          .from('leads')
+          .upsert(leadsToUpsert, { onConflict: 'apollo_id' });
 
-      if (error) throw error;
-      totalSaved += leadsToUpsert.length;
+        if (error) throw error;
+        totalSaved += leadsToUpsert.length;
+        if (totalSaved >= maxLeads) break;
+      }
+      
       if (totalSaved >= maxLeads) break;
     }
 
