@@ -70,8 +70,17 @@ app.post('/apollo/pre-flight', validateApolloConfig, async (req, res) => {
       }
     });
     
+    // Defensive check for pagination
+    if (!response.data.pagination) {
+      console.log('DEBUG: Apollo search response missing pagination object.');
+      console.log('DEBUG: Data keys available:', Object.keys(response.data));
+      // Fallback: Check if total_entries is at the root (some API versions do this)
+      const fallbackCount = response.data.total_entries || (response.data.people ? response.data.people.length : 0);
+      return res.json({ total_entries: fallbackCount });
+    }
+
     res.json({
-      total_entries: response.data.pagination.total_entries
+      total_entries: response.data.pagination.total_entries || 0
     });
   } catch (error) {
     console.error('Apollo pre-flight error:', error.response?.data || error.message);
@@ -105,11 +114,15 @@ app.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
         }
       });
 
-      const personIds = (searchResponse.data.people || []).map(p => p.id);
-      if (personIds.length === 0) break;
+      const people = searchResponse.data.people || [];
+      const personIds = people.map(p => p.id);
+      
+      if (personIds.length === 0) {
+        console.log(`DEBUG: No more people found on page ${page}. stopping.`);
+        break;
+      }
 
       // Step 2: Enrich Person Profiles to get Emails (Consumes Credits)
-      // Apollo /bulk_match works best with smaller batches (10-100)
       for (let i = 0; i < personIds.length; i += maxBulkMatch) {
         const batchIds = personIds.slice(i, i + maxBulkMatch);
         
@@ -126,10 +139,10 @@ app.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
           }
         });
 
-        const people = enrichResponse.data.matches || enrichResponse.data.people || [];
-        if (people.length === 0) continue;
+        const matchedPeople = enrichResponse.data.matches || enrichResponse.data.people || [];
+        if (matchedPeople.length === 0) continue;
 
-        const leadsToUpsert = people.map(person => ({
+        const leadsToUpsert = matchedPeople.map(person => ({
           apollo_id: person.id,
           company: person.organization?.name || 'Unknown',
           contact_name: person.name,
@@ -140,7 +153,7 @@ app.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
           website: person.organization?.website_url || 'N/A',
           linkedin: person.linkedin_url || person.organization?.linkedin_url || '',
           date_added: new Date().toISOString()
-        })).slice(0, Math.min(people.length, maxLeads - totalSaved));
+        })).slice(0, Math.min(matchedPeople.length, maxLeads - totalSaved));
 
         const { error } = await supabase
           .from('leads')
@@ -184,14 +197,13 @@ app.get('/settings', async (req, res) => {
 
     console.log(`Fetched ${data.length} settings from DB.`);
 
-    // Resilience: Support both 'type' and 'category' column names
     const getField = (item, field1, field2) => item[field1] || item[field2];
 
     const grouped = {
       countries: data.filter(s => getField(s, 'type', 'category') === 'country').map(s => s.value),
       titles: data.filter(s => getField(s, 'type', 'category') === 'title').map(s => s.value),
       keywords: data.filter(s => getField(s, 'type', 'category') === 'keyword').map(s => s.value),
-      raw: data.map(s => ({ ...s, type: getField(s, 'type', 'category') })) // Ensure AdminSettings sees 'type'
+      raw: data.map(s => ({ ...s, type: getField(s, 'type', 'category') }))
     };
     
     res.json(grouped);
@@ -203,11 +215,9 @@ app.get('/settings', async (req, res) => {
 
 app.post('/settings', async (req, res) => {
   const { type, value } = req.body;
-  // Resilience: Try to insert into both or whichever exists (Supabase might ignore missing columns or error)
-  // Most likely it's either 'type' or 'category'. We'll try 'type' first as per seed.
   const payload = { value };
   payload.type = type;
-  payload.category = type; // Set both just in case
+  payload.category = type;
 
   const { data, error } = await supabase.from('settings').insert([payload]);
   if (error) {
