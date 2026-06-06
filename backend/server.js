@@ -56,7 +56,7 @@ app.post('/apollo/pre-flight', validateApolloConfig, async (req, res) => {
     
     const response = await axios({
       method: 'post',
-      url: 'https://api.apollo.io/v1/people/search',
+      url: 'https://api.apollo.io/v1/mixed_people/api_search',
       headers: { 
         'X-Api-Key': APOLLO_API_KEY,
         'Content-Type': 'application/json',
@@ -66,7 +66,7 @@ app.post('/apollo/pre-flight', validateApolloConfig, async (req, res) => {
         ...filters,
         page: 1,
         per_page: 1,
-        contact_email_status: ["verified"]
+        contact_email_status_v2: ["verified"]
       }
     });
     
@@ -88,24 +88,41 @@ app.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
     const pagesToFetch = Math.ceil(Math.min(maxLeads, 1000) / perPage);
 
     for (let page = 1; page <= pagesToFetch; page++) {
-      const response = await axios({
+      // Step 1: Search for Person IDs (Free)
+      const searchResponse = await axios({
         method: 'post',
-        url: 'https://api.apollo.io/v1/people/search',
+        url: 'https://api.apollo.io/v1/mixed_people/api_search',
         headers: { 
           'X-Api-Key': APOLLO_API_KEY,
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache'
+          'Content-Type': 'application/json'
         },
         data: {
           ...filters,
           page: page,
           per_page: perPage,
-          contact_email_status: ["verified"]
+          contact_email_status_v2: ["verified"]
         }
       });
 
-      const people = response.data.people;
-      if (!people || people.length === 0) break;
+      const personIds = (searchResponse.data.people || []).map(p => p.id);
+      if (personIds.length === 0) break;
+
+      // Step 2: Enrich Person Profiles to get Emails (Consumes Credits)
+      const enrichResponse = await axios({
+        method: 'post',
+        url: 'https://api.apollo.io/v1/people/bulk_match',
+        headers: { 
+          'X-Api-Key': APOLLO_API_KEY,
+          'Content-Type': 'application/json'
+        },
+        data: {
+          ids: personIds,
+          reveal_personal_emails: true
+        }
+      });
+
+      const people = enrichResponse.data.matches || enrichResponse.data.people || [];
+      if (people.length === 0) break;
 
       const leadsToUpsert = people.map(person => ({
         apollo_id: person.id,
@@ -113,7 +130,7 @@ app.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
         contact_name: person.name,
         title: person.title,
         email: person.email,
-        status: person.contact_email_status,
+        status: person.contact_email_status || 'verified',
         country: person.country || person.organization?.country || 'Unknown',
         website: person.organization?.website_url || 'N/A',
         linkedin: person.linkedin_url || person.organization?.linkedin_url || '',
