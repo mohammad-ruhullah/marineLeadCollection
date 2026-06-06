@@ -94,7 +94,7 @@ const MultiSelect = ({
   );
 };
 
-const FilterSidebar: React.FC<FilterSidebarProps> = React.memo(({ onFilterChange, onCalculate, isCalculating }) => {
+const FilterSidebar: React.FC<FilterSidebarProps> = ({ onFilterChange, onCalculate, isCalculating }) => {
   const [settings, setSettings] = useState<Settings>({ countries: [], titles: [], keywords: [] });
   const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
   const [selectedTitles, setSelectedTitles] = useState<string[]>([]);
@@ -119,9 +119,9 @@ const FilterSidebar: React.FC<FilterSidebarProps> = React.memo(({ onFilterChange
     const filters: any = {};
     if (selectedCountries.length > 0) filters.person_locations = selectedCountries;
     if (selectedTitles.length > 0) filters.person_titles = selectedTitles;
-    if (selectedKeywords.length > 0) filters.q_organization_keyword_tags = selectedKeywords;
+    if (selectedKeywords.length > 0) filters.organization_keyword_tags = selectedKeywords;
     
-    console.log('Filters updated:', filters);
+    console.log('Filters updated and synced to App:', filters);
     onFilterChange(filters);
   }, [selectedCountries, selectedTitles, selectedKeywords]);
 

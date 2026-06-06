@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Header from './components/Header';
 import FilterSidebar from './components/FilterSidebar';
 import SearchModal from './components/SearchModal';
@@ -38,20 +38,23 @@ function App() {
     fetchLeads();
   }, []);
 
-  const handleCalculate = async () => {
+  const handleCalculate = useCallback(async () => {
+    console.log('handleCalculate triggered with filters:', filters);
     setIsCalculating(true);
     setFetchResult(null);
     try {
       const data = await apolloApi.preFlight(filters);
-      setTotalEntries(data.total_entries);
+      console.log('Pre-flight response data:', data);
+      setTotalEntries(data.total_entries || 0);
       setIsModalOpen(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error in pre-flight calculation:', error);
-      alert('Failed to calculate leads. Please check console.');
+      const errorMsg = error.response?.data?.error || error.message;
+      alert(`Failed to calculate leads: ${errorMsg}`);
     } finally {
       setIsCalculating(false);
     }
-  };
+  }, [filters]);
 
   const handleConfirmFetch = async (maxLeads: number) => {
     setIsFetching(true);
