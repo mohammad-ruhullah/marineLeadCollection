@@ -2,19 +2,24 @@ const express = require('express');
 const { createClient } = require('@supabase/supabase-js');
 const cors = require('cors');
 const axios = require('axios');
-require('dotenv').config();
+const path = require('path');
+
+// Robust dotenv loading: explicitly target backend/.env
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-const APOLLO_API_KEY = process.env.APOLLO_API_KEY;
+// Trim the API key to handle accidental spaces/newlines in .env
+const APOLLO_API_KEY = (process.env.APOLLO_API_KEY || '').trim();
 
 // Validation Middleware
 const validateApolloConfig = (req, res, next) => {
   if (!APOLLO_API_KEY) {
-    return res.status(500).json({ error: 'Apollo API Key is missing. Please check your .env file.' });
+    console.error('CRITICAL ERROR: APOLLO_API_KEY is missing from process.env');
+    return res.status(500).json({ error: 'Apollo API Key is missing. Please check your backend/.env file.' });
   }
   next();
 };
@@ -22,11 +27,16 @@ const validateApolloConfig = (req, res, next) => {
 // Helper to check Apollo Credit Usage
 app.get('/apollo/credits', validateApolloConfig, async (req, res) => {
   try {
-    const response = await axios.get('https://api.apollo.io/v1/auth/health', {
-      headers: { 'X-Api-Key': APOLLO_API_KEY }
+    const response = await axios({
+      method: 'get',
+      url: 'https://api.apollo.io/v1/auth/health',
+      headers: { 
+        'X-Api-Key': APOLLO_API_KEY,
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache'
+      }
     });
-    // Apollo health returns { is_logged_in: true, total_credits: 1000, used_credits: 100 }
-    // Mapping to match frontend CreditData interface { total, used, remaining }
+    
     res.json({
       total: response.data.total_credits || 0,
       used: response.data.used_credits || 0,
@@ -43,13 +53,21 @@ app.post('/apollo/pre-flight', validateApolloConfig, async (req, res) => {
   try {
     const filters = req.body;
     console.log('Calculating leads with filters:', JSON.stringify(filters));
-    const response = await axios.post('https://api.apollo.io/v1/people/search', {
-      ...filters,
-      page: 1,
-      per_page: 1,
-      contact_email_status: ["verified"]
-    }, {
-      headers: { 'X-Api-Key': APOLLO_API_KEY }
+    
+    const response = await axios({
+      method: 'post',
+      url: 'https://api.apollo.io/v1/people/search',
+      headers: { 
+        'X-Api-Key': APOLLO_API_KEY,
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache'
+      },
+      data: {
+        ...filters,
+        page: 1,
+        per_page: 1,
+        contact_email_status: ["verified"]
+      }
     });
     
     res.json({
@@ -67,16 +85,23 @@ app.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
     const { filters, maxLeads } = req.body;
     let totalSaved = 0;
     const perPage = 100;
-    const pagesToFetch = Math.ceil(Math.min(maxLeads, 1000) / perPage); // Limit to 1000 for safety in one go
+    const pagesToFetch = Math.ceil(Math.min(maxLeads, 1000) / perPage);
 
     for (let page = 1; page <= pagesToFetch; page++) {
-      const response = await axios.post('https://api.apollo.io/v1/people/search', {
-        ...filters,
-        page: page,
-        per_page: perPage,
-        contact_email_status: ["verified"]
-      }, {
-        headers: { 'X-Api-Key': APOLLO_API_KEY }
+      const response = await axios({
+        method: 'post',
+        url: 'https://api.apollo.io/v1/people/search',
+        headers: { 
+          'X-Api-Key': APOLLO_API_KEY,
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache'
+        },
+        data: {
+          ...filters,
+          page: page,
+          per_page: perPage,
+          contact_email_status: ["verified"]
+        }
       });
 
       const people = response.data.people;
@@ -167,4 +192,3 @@ if (require.main === module) {
 }
 
 module.exports = app;
-
