@@ -164,7 +164,7 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ onFilterChange, onCalcula
       </button>
     </aside>
   );
-});
+};
 
 
 export default FilterSidebar;
