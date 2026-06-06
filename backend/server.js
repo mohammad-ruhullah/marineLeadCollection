@@ -50,9 +50,17 @@ app.get('/apollo/credits', validateApolloConfig, async (req, res) => {
 
 // Pre-flight route: Get total count for filters
 app.post('/apollo/pre-flight', validateApolloConfig, async (req, res) => {
+  const filters = req.body;
+  const payload = {
+    ...filters,
+    page: 1,
+    per_page: 1,
+    contact_email_status_v2: ["verified"]
+  };
+
   try {
-    const filters = req.body;
-    console.log('Calculating leads with filters:', JSON.stringify(filters));
+    console.log('--- APOLLO SEARCH REQUEST START ---');
+    console.log('Payload:', JSON.stringify(payload));
     
     const response = await axios({
       method: 'post',
@@ -62,19 +70,13 @@ app.post('/apollo/pre-flight', validateApolloConfig, async (req, res) => {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-cache'
       },
-      data: {
-        ...filters,
-        page: 1,
-        per_page: 1,
-        contact_email_status_v2: ["verified"]
-      }
+      data: payload
     });
     
-    // Defensive check for pagination
+    console.log('Apollo Search Response Status:', response.status);
+    
     if (!response.data.pagination) {
-      console.log('DEBUG: Apollo search response missing pagination object.');
-      console.log('DEBUG: Data keys available:', Object.keys(response.data));
-      // Fallback: Check if total_entries is at the root (some API versions do this)
+      console.log('DEBUG: Missing pagination. Keys:', Object.keys(response.data));
       const fallbackCount = response.data.total_entries || (response.data.people ? response.data.people.length : 0);
       return res.json({ total_entries: fallbackCount });
     }
@@ -83,8 +85,18 @@ app.post('/apollo/pre-flight', validateApolloConfig, async (req, res) => {
       total_entries: response.data.pagination.total_entries || 0
     });
   } catch (error) {
-    console.error('Apollo pre-flight error:', error.response?.data || error.message);
-    res.status(500).json({ error: error.response?.data?.error || 'Failed to calculate leads' });
+    console.error('--- APOLLO SEARCH REQUEST FAILED ---');
+    if (error.response) {
+      console.error('Status:', error.response.status);
+      console.error('Data:', JSON.stringify(error.response.data, null, 2));
+    } else {
+      console.error('Message:', error.message);
+    }
+    res.status(500).json({ 
+      error: error.response?.data?.error || error.message || 'Failed to calculate leads' 
+    });
+  } finally {
+    console.log('--- APOLLO SEARCH REQUEST END ---');
   }
 });
 
@@ -97,8 +109,10 @@ app.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
     const maxBulkMatch = 10; // Apollo recommends batching for bulk_match
     const pagesToFetch = Math.ceil(Math.min(maxLeads, 1000) / perPage);
 
+    console.log(`--- BULK FETCH START: targeting ${maxLeads} leads ---`);
+
     for (let page = 1; page <= pagesToFetch; page++) {
-      // Step 1: Search for Person IDs (Free)
+      console.log(`Step 1: Searching page ${page}...`);
       const searchResponse = await axios({
         method: 'post',
         url: 'https://api.apollo.io/api/v1/mixed_people/api_search',
@@ -122,54 +136,72 @@ app.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
         break;
       }
 
+      console.log(`Step 2: Enriching ${personIds.length} people from page ${page}...`);
+      
       // Step 2: Enrich Person Profiles to get Emails (Consumes Credits)
+      // Apollo /bulk_match requires a "details" array of objects
       for (let i = 0; i < personIds.length; i += maxBulkMatch) {
         const batchIds = personIds.slice(i, i + maxBulkMatch);
+        const details = batchIds.map(id => ({ id }));
         
-        const enrichResponse = await axios({
-          method: 'post',
-          url: 'https://api.apollo.io/api/v1/people/bulk_match',
-          headers: { 
-            'X-Api-Key': APOLLO_API_KEY,
-            'Content-Type': 'application/json'
-          },
-          data: {
-            ids: batchIds,
-            reveal_personal_emails: true
+        try {
+          const enrichResponse = await axios({
+            method: 'post',
+            url: 'https://api.apollo.io/api/v1/people/bulk_match',
+            headers: { 
+              'X-Api-Key': APOLLO_API_KEY,
+              'Content-Type': 'application/json'
+            },
+            data: {
+              details: details,
+              reveal_personal_emails: true
+            }
+          });
+
+          const matchedPeople = enrichResponse.data.matches || enrichResponse.data.people || [];
+          if (matchedPeople.length === 0) continue;
+
+          const leadsToUpsert = matchedPeople.map(person => ({
+            apollo_id: person.id,
+            company: person.organization?.name || 'Unknown',
+            contact_name: person.name,
+            title: person.title,
+            email: person.email,
+            status: person.contact_email_status || 'verified',
+            country: person.country || person.organization?.country || 'Unknown',
+            website: person.organization?.website_url || 'N/A',
+            linkedin: person.linkedin_url || person.organization?.linkedin_url || '',
+            date_added: new Date().toISOString()
+          })).slice(0, Math.min(people.length, maxLeads - totalSaved));
+
+          const { error } = await supabase
+            .from('leads')
+            .upsert(leadsToUpsert, { onConflict: 'apollo_id' });
+
+          if (error) throw error;
+          totalSaved += leadsToUpsert.length;
+          console.log(`Saved ${totalSaved}/${maxLeads} leads so far...`);
+          
+          if (totalSaved >= maxLeads) break;
+        } catch (enrichError) {
+          console.error('--- APOLLO ENRICHMENT FAILED ---');
+          if (enrichError.response) {
+            console.error('Status:', enrichError.response.status);
+            console.error('Data:', JSON.stringify(enrichError.response.data, null, 2));
+          } else {
+            console.error('Message:', enrichError.message);
           }
-        });
-
-        const matchedPeople = enrichResponse.data.matches || enrichResponse.data.people || [];
-        if (matchedPeople.length === 0) continue;
-
-        const leadsToUpsert = matchedPeople.map(person => ({
-          apollo_id: person.id,
-          company: person.organization?.name || 'Unknown',
-          contact_name: person.name,
-          title: person.title,
-          email: person.email,
-          status: person.contact_email_status || 'verified',
-          country: person.country || person.organization?.country || 'Unknown',
-          website: person.organization?.website_url || 'N/A',
-          linkedin: person.linkedin_url || person.organization?.linkedin_url || '',
-          date_added: new Date().toISOString()
-        })).slice(0, Math.min(matchedPeople.length, maxLeads - totalSaved));
-
-        const { error } = await supabase
-          .from('leads')
-          .upsert(leadsToUpsert, { onConflict: 'apollo_id' });
-
-        if (error) throw error;
-        totalSaved += leadsToUpsert.length;
-        if (totalSaved >= maxLeads) break;
+          throw enrichError;
+        }
       }
       
       if (totalSaved >= maxLeads) break;
     }
 
+    console.log(`--- BULK FETCH COMPLETE: Saved ${totalSaved} leads ---`);
     res.json({ success: true, total_saved: totalSaved });
   } catch (error) {
-    console.error('Apollo bulk fetch error:', error.response?.data || error.message);
+    console.error('Apollo bulk fetch process error:', error.response?.data || error.message);
     res.status(500).json({ error: 'Failed to fetch and save leads' });
   }
 });
