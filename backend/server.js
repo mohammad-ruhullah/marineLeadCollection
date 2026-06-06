@@ -175,15 +175,24 @@ app.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
 
 app.get('/leads', async (req, res) => {
   try {
-    // Ordering by created_at since date_added doesn't exist. Fallback to id if created_at is also missing.
+    console.log('Fetching leads from Supabase...');
     const { data, error } = await supabase
       .from('leads')
-      .select('*')
-      .order('id', { ascending: false }); // Using id for stable descending order
+      .select('*');
       
     if (error) throw error;
-    res.json(data);
+    
+    // Sort manually in JS to be safe against missing columns in DB order
+    const sortedData = (data || []).sort((a, b) => {
+      const dateA = new Date(a.created_at || a.date_added || a.id || 0).getTime();
+      const dateB = new Date(b.created_at || b.date_added || b.id || 0).getTime();
+      return dateB - dateA;
+    });
+
+    console.log(`Successfully fetched ${sortedData.length} leads.`);
+    res.json(sortedData);
   } catch (error) {
+    console.error('Fetch leads error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });

@@ -26,6 +26,7 @@ function App() {
     setLeadsLoading(true);
     try {
       const data = await apolloApi.getLeads();
+      console.log('Leads fetched from backend:', data);
       setLeads(data);
     } catch (error) {
       console.error('Error fetching leads:', error);
