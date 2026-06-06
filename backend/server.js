@@ -4,15 +4,26 @@ const cors = require('cors');
 const axios = require('axios');
 const path = require('path');
 
-// Robust dotenv loading: explicitly target backend/.env
-require('dotenv').config({ path: path.resolve(__dirname, '.env') });
+// Only load dotenv in local development
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config({ path: path.resolve(__dirname, '.env') });
+}
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-// Trim the API key to handle accidental spaces/newlines in .env
+// Initialize Supabase only if variables exist
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+let supabase;
+if (SUPABASE_URL && SUPABASE_KEY) {
+  supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+} else {
+  console.error('CRITICAL: Supabase environment variables are missing!');
+}
+...
 const APOLLO_API_KEY = (process.env.APOLLO_API_KEY || '').trim();
 
 // Validation Middleware
