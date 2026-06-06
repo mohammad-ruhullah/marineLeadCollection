@@ -2,6 +2,10 @@
   "name": "shipparts-leadgen",
   "version": "1.0.0",
   "private": true,
+  "scripts": {
+    "build": "cd frontend && npm install && npm run build",
+    "install-all": "npm install && cd backend && npm install && cd ../frontend && npm install"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.1",
     "axios": "^1.16.1",
