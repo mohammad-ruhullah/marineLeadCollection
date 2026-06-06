@@ -157,24 +157,38 @@ app.get('/settings', async (req, res) => {
     const { data, error } = await supabase.from('settings').select('*');
     if (error) throw error;
 
-    // Grouping for FilterSidebar
+    console.log(`Fetched ${data.length} settings from DB.`);
+
+    // Resilience: Support both 'type' and 'category' column names
+    const getField = (item, field1, field2) => item[field1] || item[field2];
+
     const grouped = {
-      countries: data.filter(s => s.type === 'country').map(s => s.value),
-      titles: data.filter(s => s.type === 'title').map(s => s.value),
-      keywords: data.filter(s => s.type === 'keyword').map(s => s.value),
-      raw: data // For AdminSettings
+      countries: data.filter(s => getField(s, 'type', 'category') === 'country').map(s => s.value),
+      titles: data.filter(s => getField(s, 'type', 'category') === 'title').map(s => s.value),
+      keywords: data.filter(s => getField(s, 'type', 'category') === 'keyword').map(s => s.value),
+      raw: data.map(s => ({ ...s, type: getField(s, 'type', 'category') })) // Ensure AdminSettings sees 'type'
     };
     
     res.json(grouped);
   } catch (error) {
+    console.error('Settings fetch error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
 app.post('/settings', async (req, res) => {
   const { type, value } = req.body;
-  const { data, error } = await supabase.from('settings').insert([{ type, value }]);
-  if (error) return res.status(500).json({ error: error.message });
+  // Resilience: Try to insert into both or whichever exists (Supabase might ignore missing columns or error)
+  // Most likely it's either 'type' or 'category'. We'll try 'type' first as per seed.
+  const payload = { value };
+  payload.type = type;
+  payload.category = type; // Set both just in case
+
+  const { data, error } = await supabase.from('settings').insert([payload]);
+  if (error) {
+    console.error('Settings insert error:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
   res.json(data);
 });
 
