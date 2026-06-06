@@ -23,7 +23,7 @@ if (SUPABASE_URL && SUPABASE_KEY) {
 } else {
   console.error('CRITICAL: Supabase environment variables are missing!');
 }
-...
+
 const APOLLO_API_KEY = (process.env.APOLLO_API_KEY || '').trim();
 
 // Validation Middleware
@@ -35,8 +35,10 @@ const validateApolloConfig = (req, res, next) => {
   next();
 };
 
+const router = express.Router();
+
 // Helper to check Apollo Credit Usage
-app.get('/apollo/credits', validateApolloConfig, async (req, res) => {
+router.get('/apollo/credits', validateApolloConfig, async (req, res) => {
   try {
     const response = await axios({
       method: 'get',
@@ -60,7 +62,7 @@ app.get('/apollo/credits', validateApolloConfig, async (req, res) => {
 });
 
 // Pre-flight route: Get total count for filters
-app.post('/apollo/pre-flight', validateApolloConfig, async (req, res) => {
+router.post('/apollo/pre-flight', validateApolloConfig, async (req, res) => {
   const filters = req.body;
   const payload = {
     ...filters,
@@ -94,7 +96,7 @@ app.post('/apollo/pre-flight', validateApolloConfig, async (req, res) => {
 });
 
 // Bulk Fetch route: Fetch and save leads in batches
-app.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
+router.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
   try {
     const { filters, maxLeads } = req.body;
     let totalSaved = 0;
@@ -156,7 +158,6 @@ app.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
             country: person.country || person.organization?.country || 'Unknown',
             website: person.organization?.website_url || 'N/A',
             linkedin: person.linkedin_url || person.organization?.linkedin_url || ''
-            // Note: date_added removed to allow Supabase to use its default created_at
           })).slice(0, Math.min(matchedPeople.length, maxLeads - totalSaved));
 
           const { error } = await supabase
@@ -184,7 +185,7 @@ app.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
   }
 });
 
-app.get('/leads', async (req, res) => {
+router.get('/leads', async (req, res) => {
   try {
     console.log('Fetching leads from Supabase...');
     const { data, error } = await supabase
@@ -208,7 +209,7 @@ app.get('/leads', async (req, res) => {
   }
 });
 
-app.get('/settings', async (req, res) => {
+router.get('/settings', async (req, res) => {
   try {
     const { data, error } = await supabase.from('settings').select('*');
     if (error) throw error;
@@ -231,7 +232,7 @@ app.get('/settings', async (req, res) => {
   }
 });
 
-app.post('/settings', async (req, res) => {
+router.post('/settings', async (req, res) => {
   const { type, value } = req.body;
   const payload = { value };
   payload.type = type;
@@ -245,11 +246,15 @@ app.post('/settings', async (req, res) => {
   res.json(data);
 });
 
-app.delete('/settings/:id', async (req, res) => {
+router.delete('/settings/:id', async (req, res) => {
   const { error } = await supabase.from('settings').delete().eq('id', req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
 });
+
+// Mount the router under both /api and / to handle different environments
+app.use('/api', router);
+app.use('/', router);
 
 const PORT = process.env.PORT || 3000;
 if (require.main === module) {
