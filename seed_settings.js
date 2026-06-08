@@ -35,9 +35,9 @@ async function seed() {
   console.log('Starting seed...');
   
   const dataToInsert = [
-    ...countries.map(v => ({ type: 'country', value: v })),
-    ...titles.map(v => ({ type: 'title', value: v })),
-    ...keywords.map(v => ({ type: 'keyword', value: v }))
+    ...countries.map(v => ({ category: 'country', value: v })),
+    ...titles.map(v => ({ category: 'title', value: v })),
+    ...keywords.map(v => ({ category: 'keyword', value: v }))
   ];
 
   const { error } = await supabase

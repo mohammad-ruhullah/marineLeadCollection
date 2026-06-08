@@ -240,14 +240,11 @@ router.post('/settings', async (req, res) => {
     }
 
     const payload = { 
-      type: type,
+      category: type,
       value: value 
     };
 
-    // We don't set 'category' here because it might not exist in the schema
-    // and would cause the insert to fail. The GET route handles both for legacy reasons.
-
-    console.log('Inserting setting:', payload);
+    console.log('--- DEBUG: Inserting setting into category column:', payload);
 
     const { data, error } = await supabase
       .from('settings')
