@@ -233,17 +233,38 @@ router.get('/settings', async (req, res) => {
 });
 
 router.post('/settings', async (req, res) => {
-  const { type, value } = req.body;
-  const payload = { value };
-  payload.type = type;
-  payload.category = type;
+  try {
+    const { type, value } = req.body;
+    if (!type || !value) {
+      return res.status(400).json({ error: 'Type and value are required' });
+    }
 
-  const { data, error } = await supabase.from('settings').insert([payload]);
-  if (error) {
-    console.error('Settings insert error:', error.message);
-    return res.status(500).json({ error: error.message });
+    const payload = { 
+      type: type,
+      value: value 
+    };
+
+    // We don't set 'category' here because it might not exist in the schema
+    // and would cause the insert to fail. The GET route handles both for legacy reasons.
+
+    console.log('Inserting setting:', payload);
+
+    const { data, error } = await supabase
+      .from('settings')
+      .insert([payload])
+      .select();
+
+    if (error) {
+      console.error('Settings insert error:', error.message);
+      return res.status(500).json({ error: error.message });
+    }
+
+    console.log('Setting inserted successfully:', data);
+    res.json(data);
+  } catch (error) {
+    console.error('Settings post route error:', error.message);
+    res.status(500).json({ error: error.message });
   }
-  res.json(data);
 });
 
 router.delete('/settings/:id', async (req, res) => {
