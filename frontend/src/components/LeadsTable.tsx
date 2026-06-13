@@ -32,7 +32,7 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh }) =>
       total: leads.length,
       verified: leads.filter(l => l.status === 'Verified').length,
       pending: leads.filter(l => l.status === 'Not Verified').length,
-      invalid: leads.filter(l => l.status === 'Invalid' || l.status === 'Risky').length,
+      invalid: leads.filter(l => l.status === 'Invalid' || l.status === 'Risky' || l.status === 'Not Result Found').length,
     };
   }, [leads]);
 
@@ -94,6 +94,8 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh }) =>
         return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 uppercase tracking-wide">Invalid</span>;
       case 'Risky':
         return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 uppercase tracking-wide">Risky</span>;
+      case 'Not Result Found':
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-700 uppercase tracking-wide">Not Result Found</span>;
       default:
         return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-700 uppercase tracking-wide">{status}</span>;
     }

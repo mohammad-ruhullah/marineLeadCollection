@@ -236,7 +236,12 @@ router.post('/apollo/leads/verify', validateHunterConfig, async (req, res) => {
         const hunterData = response.data ? response.data.data : null;
         
         if (!hunterData || !hunterData.result) {
-          console.log(`Hunter.io returned no result for ${lead.email}, skipping.`);
+          console.log(`Hunter.io returned no result for ${lead.email}, marking as Not Result Found.`);
+          await supabase
+            .from('leads')
+            .update({ status: 'Not Result Found' })
+            .eq('apollo_id', lead.apollo_id);
+          processedCount++; // Count as processed to move the progress bar
           continue;
         }
 
@@ -262,11 +267,24 @@ router.post('/apollo/leads/verify', validateHunterConfig, async (req, res) => {
       } catch (hunterError) {
         // Handle 202 Accepted (processing) or other non-200 responses
         if (hunterError.response?.status === 202) {
-          console.log(`Hunter.io still processing ${lead.email}, skipping for now.`);
+          console.log(`Hunter.io still processing ${lead.email}, marking as Not Result Found.`);
+          await supabase
+            .from('leads')
+            .update({ status: 'Not Result Found' })
+            .eq('apollo_id', lead.apollo_id);
+          processedCount++;
           continue;
         }
         
         console.error(`Hunter.io error for ${lead.email}:`, hunterError.response?.data || hunterError.message);
+        
+        // Mark as "Not Result Found" even on error to prevent infinite loops
+        await supabase
+            .from('leads')
+            .update({ status: 'Not Result Found' })
+            .eq('apollo_id', lead.apollo_id);
+        processedCount++;
+
         if (hunterError.response?.status === 401 || hunterError.response?.status === 403) {
           throw new Error('Hunter.io API Key is invalid or restricted');
         }
