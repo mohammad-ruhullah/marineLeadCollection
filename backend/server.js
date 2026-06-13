@@ -201,7 +201,8 @@ router.post('/apollo/leads/verify', validateHunterConfig, async (req, res) => {
     // 1. Fetch all leads with "Not Verified" status
     const { data: leads, error } = await supabase
       .from('leads')
-      .filter('status', 'eq', 'Not Verified');
+      .select('*')
+      .eq('status', 'Not Verified');
 
     if (error) throw error;
     if (!leads || leads.length === 0) {
