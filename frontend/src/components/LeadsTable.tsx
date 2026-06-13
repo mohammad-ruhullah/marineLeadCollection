@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { ExternalLink, Linkedin, Globe, Mail, Search as SearchIcon, Download, Shield, ShieldAlert, ShieldCheck, Play } from 'lucide-react';
 import { apolloApi } from '../services/api';
+import VerificationModal from './VerificationModal';
 
 interface Lead {
   id: string;
@@ -23,7 +24,7 @@ interface LeadsTableProps {
 
 const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [isVerifying, setIsVerifying] = useState(false);
+  const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
 
   // Stats calculation
   const stats = useMemo(() => {
@@ -42,27 +43,17 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh }) =>
     );
   }, [leads, searchTerm]);
 
-  const handleVerify = async () => {
+  const handleVerify = () => {
     if (stats.pending === 0) {
       alert('No leads pending verification.');
       return;
     }
+    setIsVerificationModalOpen(true);
+  };
 
-    if (!confirm(`Are you sure you want to verify ${stats.pending} leads using Hunter.io? This will use your Hunter.io credits.`)) {
-      return;
-    }
-
-    setIsVerifying(true);
-    try {
-      const result = await apolloApi.verifyLeads();
-      alert(`Verification complete! Processed ${result.processed} leads.`);
-      onRefresh(); // Refresh the list to see new statuses
-    } catch (error: any) {
-      console.error('Verification error:', error);
-      alert(`Failed to verify leads: ${error.response?.data?.error || error.message}`);
-    } finally {
-      setIsVerifying(false);
-    }
+  const handleModalClose = () => {
+    setIsVerificationModalOpen(false);
+    onRefresh(); // Refresh data whenever modal closes to ensure latest status
   };
 
   const downloadCSV = () => {
@@ -189,15 +180,10 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh }) =>
         <div className="flex items-center space-x-3 w-full sm:w-auto">
           <button
             onClick={handleVerify}
-            disabled={isVerifying || stats.pending === 0}
             className="flex-1 sm:flex-none flex items-center justify-center space-x-2 px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all shadow-md active:transform active:scale-95 disabled:opacity-50 disabled:bg-gray-400"
           >
-            {isVerifying ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-            ) : (
-              <Play className="w-4 h-4" />
-            )}
-            <span>{isVerifying ? 'Verifying...' : 'Verify Pending Leads'}</span>
+            <Play className="w-4 h-4" />
+            <span>Verify Pending Leads</span>
           </button>
           
           <button
@@ -210,6 +196,14 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh }) =>
           </button>
         </div>
       </div>
+
+      {/* Modal */}
+      <VerificationModal 
+        isOpen={isVerificationModalOpen}
+        onClose={handleModalClose}
+        totalPending={stats.pending}
+        onComplete={onRefresh}
+      />
 
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">

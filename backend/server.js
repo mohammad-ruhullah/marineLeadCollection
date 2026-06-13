@@ -196,20 +196,22 @@ router.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
 
 router.post('/apollo/leads/verify', validateHunterConfig, async (req, res) => {
   try {
-    console.log('--- STARTING HUNTER.IO VERIFICATION ---');
+    const { limit = 5 } = req.body; // Default to 5 if not provided
+    console.log(`--- STARTING HUNTER.IO VERIFICATION (BATCH SIZE: ${limit}) ---`);
     
-    // 1. Fetch all leads with "Not Verified" status
+    // 1. Fetch leads with "Not Verified" status with a limit
     const { data: leads, error } = await supabase
       .from('leads')
       .select('*')
-      .eq('status', 'Not Verified');
+      .eq('status', 'Not Verified')
+      .limit(limit);
 
     if (error) throw error;
     if (!leads || leads.length === 0) {
       return res.json({ success: true, message: 'No leads pending verification', processed: 0 });
     }
 
-    console.log(`Found ${leads.length} leads to verify.`);
+    console.log(`Processing batch of ${leads.length} leads.`);
     let processedCount = 0;
 
     // 2. Process each lead

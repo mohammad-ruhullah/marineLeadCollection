@@ -31,8 +31,8 @@ export const apolloApi = {
     const response = await axios.delete(`${API_BASE_URL}/settings/${id}`);
     return response.data;
   },
-  verifyLeads: async () => {
-    const response = await axios.post(`${API_BASE_URL}/apollo/leads/verify`);
+  verifyLeads: async (limit?: number) => {
+    const response = await axios.post(`${API_BASE_URL}/apollo/leads/verify`, { limit });
     return response.data;
   }
 };
