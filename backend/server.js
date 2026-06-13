@@ -219,7 +219,7 @@ router.post('/apollo/leads/verify', validateHunterConfig, async (req, res) => {
         await supabase
           .from('leads')
           .update({ status: 'Invalid' })
-          .eq('id', lead.id);
+          .eq('apollo_id', lead.apollo_id);
         continue;
       }
 
@@ -249,7 +249,7 @@ router.post('/apollo/leads/verify', validateHunterConfig, async (req, res) => {
         await supabase
           .from('leads')
           .update({ status: newStatus })
-          .eq('id', lead.id);
+          .eq('apollo_id', lead.apollo_id);
 
         processedCount++;
         console.log(`Verified ${lead.email}: ${newStatus}`);
