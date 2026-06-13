@@ -227,12 +227,18 @@ router.post('/apollo/leads/verify', validateHunterConfig, async (req, res) => {
         // Call Hunter.io API
         const response = await axios({
           method: 'get',
-          url: `https://api.hunter.io/v2/email-verifier?email=${encodeURIComponent(lead.email)}&api_key=${HUNTER_API_KEY}`
+          url: `https://api.hunter.io/v2/email-verifier?email=${encodeURIComponent(lead.email)}&api_key=${HUNTER_API_KEY}`,
+          timeout: 10000 // 10 second timeout for individual email
         });
 
-        const hunterData = response.data.data;
-        let newStatus = 'Risky';
+        const hunterData = response.data ? response.data.data : null;
         
+        if (!hunterData || !hunterData.result) {
+          console.log(`Hunter.io returned no result for ${lead.email}, skipping.`);
+          continue;
+        }
+
+        let newStatus = 'Risky';
         if (hunterData.result === 'deliverable') {
           newStatus = 'Verified';
         } else if (hunterData.result === 'undeliverable') {
@@ -248,16 +254,20 @@ router.post('/apollo/leads/verify', validateHunterConfig, async (req, res) => {
         processedCount++;
         console.log(`Verified ${lead.email}: ${newStatus}`);
 
-        // Small delay to respect rate limits (Hunter.io allows 300 requests/minute)
-        await new Promise(resolve => setTimeout(resolve, 200)); 
+        // Small delay to respect rate limits
+        await new Promise(resolve => setTimeout(resolve, 150)); 
 
       } catch (hunterError) {
+        // Handle 202 Accepted (processing) or other non-200 responses
+        if (hunterError.response?.status === 202) {
+          console.log(`Hunter.io still processing ${lead.email}, skipping for now.`);
+          continue;
+        }
+        
         console.error(`Hunter.io error for ${lead.email}:`, hunterError.response?.data || hunterError.message);
-        // If it's a 401/403, stop the whole process
         if (hunterError.response?.status === 401 || hunterError.response?.status === 403) {
           throw new Error('Hunter.io API Key is invalid or restricted');
         }
-        // Otherwise continue to next lead
       }
     }
 
