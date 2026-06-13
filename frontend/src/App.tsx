@@ -41,6 +41,13 @@ function App() {
 
   const handleCalculate = useCallback(async () => {
     console.log('handleCalculate triggered with filters:', filters);
+    
+    // Validation: Check if at least one filter category is selected
+    if (!filters || Object.keys(filters).length === 0) {
+      alert('Please select at least one filter category before calculating leads.');
+      return;
+    }
+
     setIsCalculating(true);
     setFetchResult(null);
     try {
@@ -86,8 +93,6 @@ function App() {
           <FilterSidebar 
             key={settingsKey}
             onFilterChange={setFilters} 
-            onCalculate={handleCalculate} 
-            isCalculating={isCalculating}
           />
         )}
         
@@ -219,7 +224,11 @@ function App() {
                     Refresh List
                   </button>
                 </div>
-                <LeadsTable leads={leads} loading={leadsLoading} />
+                <LeadsTable 
+                  leads={leads} 
+                  loading={leadsLoading} 
+                  onRefresh={fetchLeads}
+                />
               </div>
             )}
 

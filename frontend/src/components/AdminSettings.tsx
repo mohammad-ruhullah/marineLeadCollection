@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { apolloApi } from '../services/api';
-import { Plus, Trash2, Settings, Globe, Briefcase, Tag, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Settings, Globe, Briefcase, Tag, AlertCircle, X } from 'lucide-react';
 
 interface Setting {
   id: number;
-  type: 'country' | 'title' | 'keyword';
+  type: 'country' | 'title' | 'keyword' | 'exclude_title';
   value: string;
 }
 
@@ -12,7 +12,7 @@ const AdminSettings: React.FC = () => {
   const [settings, setSettings] = useState<Setting[]>([]);
   const [loading, setLoading] = useState(true);
   const [newValue, setNewValue] = useState('');
-  const [newType, setNewType] = useState<'country' | 'title' | 'keyword'>('country');
+  const [newType, setNewType] = useState<'country' | 'title' | 'keyword' | 'exclude_title'>('country');
   const [error, setError] = useState<string | null>(null);
 
   const fetchSettings = async () => {
@@ -123,6 +123,7 @@ const AdminSettings: React.FC = () => {
           >
             <option value="country">Country</option>
             <option value="title">Job Title</option>
+            <option value="exclude_title">Exclude Job Title</option>
             <option value="keyword">Keyword</option>
           </select>
           <input
@@ -159,6 +160,12 @@ const AdminSettings: React.FC = () => {
             icon={Briefcase} 
             title="Job Titles" 
             colorClass="bg-purple-50 text-purple-700"
+          />
+          <SettingGroup 
+            type="exclude_title" 
+            icon={X} 
+            title="Exclude Job Titles" 
+            colorClass="bg-red-50 text-red-700"
           />
           <SettingGroup 
             type="keyword" 

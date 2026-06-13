@@ -25,12 +25,21 @@ if (SUPABASE_URL && SUPABASE_KEY) {
 }
 
 const APOLLO_API_KEY = (process.env.APOLLO_API_KEY || '').trim();
+const HUNTER_API_KEY = (process.env.HUNTER_API_KEY || '').trim();
 
 // Validation Middleware
 const validateApolloConfig = (req, res, next) => {
   if (!APOLLO_API_KEY) {
     console.error('CRITICAL ERROR: APOLLO_API_KEY is missing from process.env');
     return res.status(500).json({ error: 'Apollo API Key is missing. Please check your backend/.env file.' });
+  }
+  next();
+};
+
+const validateHunterConfig = (req, res, next) => {
+  if (!HUNTER_API_KEY) {
+    console.error('CRITICAL ERROR: HUNTER_API_KEY is missing from process.env');
+    return res.status(500).json({ error: 'Hunter API Key is missing. Please check your backend/.env file.' });
   }
   next();
 };
@@ -154,7 +163,7 @@ router.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
             contact_name: person.name,
             title: person.title,
             email: person.email,
-            status: person.contact_email_status || 'verified',
+            status: 'Not Verified',
             country: person.country || person.organization?.country || 'Unknown',
             website: person.organization?.website_url || 'N/A',
             linkedin: person.linkedin_url || person.organization?.linkedin_url || ''
@@ -182,6 +191,79 @@ router.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
   } catch (error) {
     console.error('Apollo bulk fetch process error:', error.message);
     res.status(500).json({ error: error.message || 'Failed to fetch and save leads' });
+  }
+});
+
+router.post('/apollo/leads/verify', validateHunterConfig, async (req, res) => {
+  try {
+    console.log('--- STARTING HUNTER.IO VERIFICATION ---');
+    
+    // 1. Fetch all leads with "Not Verified" status
+    const { data: leads, error } = await supabase
+      .from('leads')
+      .filter('status', 'eq', 'Not Verified');
+
+    if (error) throw error;
+    if (!leads || leads.length === 0) {
+      return res.json({ success: true, message: 'No leads pending verification', processed: 0 });
+    }
+
+    console.log(`Found ${leads.length} leads to verify.`);
+    let processedCount = 0;
+
+    // 2. Process each lead
+    for (const lead of leads) {
+      if (!lead.email) {
+        // Skip leads without email
+        await supabase
+          .from('leads')
+          .update({ status: 'Invalid' })
+          .eq('id', lead.id);
+        continue;
+      }
+
+      try {
+        // Call Hunter.io API
+        const response = await axios({
+          method: 'get',
+          url: `https://api.hunter.io/v2/email-verifier?email=${encodeURIComponent(lead.email)}&api_key=${HUNTER_API_KEY}`
+        });
+
+        const hunterData = response.data.data;
+        let newStatus = 'Risky';
+        
+        if (hunterData.result === 'deliverable') {
+          newStatus = 'Verified';
+        } else if (hunterData.result === 'undeliverable') {
+          newStatus = 'Invalid';
+        }
+
+        // 3. Update Supabase
+        await supabase
+          .from('leads')
+          .update({ status: newStatus })
+          .eq('id', lead.id);
+
+        processedCount++;
+        console.log(`Verified ${lead.email}: ${newStatus}`);
+
+        // Small delay to respect rate limits (Hunter.io allows 300 requests/minute)
+        await new Promise(resolve => setTimeout(resolve, 200)); 
+
+      } catch (hunterError) {
+        console.error(`Hunter.io error for ${lead.email}:`, hunterError.response?.data || hunterError.message);
+        // If it's a 401/403, stop the whole process
+        if (hunterError.response?.status === 401 || hunterError.response?.status === 403) {
+          throw new Error('Hunter.io API Key is invalid or restricted');
+        }
+        // Otherwise continue to next lead
+      }
+    }
+
+    res.json({ success: true, processed: processedCount });
+  } catch (error) {
+    console.error('Hunter verification process error:', error.message);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -221,6 +303,7 @@ router.get('/settings', async (req, res) => {
     const grouped = {
       countries: data.filter(s => getField(s, 'type', 'category') === 'country').map(s => s.value),
       titles: data.filter(s => getField(s, 'type', 'category') === 'title').map(s => s.value),
+      excludeTitles: data.filter(s => getField(s, 'type', 'category') === 'exclude_title').map(s => s.value),
       keywords: data.filter(s => getField(s, 'type', 'category') === 'keyword').map(s => s.value),
       raw: data.map(s => ({ ...s, type: getField(s, 'type', 'category') }))
     };

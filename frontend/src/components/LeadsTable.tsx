@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { ExternalLink, Linkedin, Globe, Mail, Search as SearchIcon, Download } from 'lucide-react';
+import { ExternalLink, Linkedin, Globe, Mail, Search as SearchIcon, Download, Shield, ShieldAlert, ShieldCheck, Play } from 'lucide-react';
+import { apolloApi } from '../services/api';
 
 interface Lead {
   id: string;
@@ -17,10 +18,22 @@ interface Lead {
 interface LeadsTableProps {
   leads: Lead[];
   loading: boolean;
+  onRefresh: () => void;
 }
 
-const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading }) => {
+const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
+
+  // Stats calculation
+  const stats = useMemo(() => {
+    return {
+      total: leads.length,
+      verified: leads.filter(l => l.status === 'Verified').length,
+      pending: leads.filter(l => l.status === 'Not Verified').length,
+      invalid: leads.filter(l => l.status === 'Invalid' || l.status === 'Risky').length,
+    };
+  }, [leads]);
 
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => 
@@ -28,6 +41,29 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading }) => {
       lead.country.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [leads, searchTerm]);
+
+  const handleVerify = async () => {
+    if (stats.pending === 0) {
+      alert('No leads pending verification.');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to verify ${stats.pending} leads using Hunter.io? This will use your Hunter.io credits.`)) {
+      return;
+    }
+
+    setIsVerifying(true);
+    try {
+      const result = await apolloApi.verifyLeads();
+      alert(`Verification complete! Processed ${result.processed} leads.`);
+      onRefresh(); // Refresh the list to see new statuses
+    } catch (error: any) {
+      console.error('Verification error:', error);
+      alert(`Failed to verify leads: ${error.response?.data?.error || error.message}`);
+    } finally {
+      setIsVerifying(false);
+    }
+  };
 
   const downloadCSV = () => {
     const headers = ['Company', 'Contact Name', 'Title', 'Email', 'Status', 'Country', 'Website', 'LinkedIn', 'Date Added'];
@@ -57,6 +93,21 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading }) => {
     document.body.removeChild(link);
   };
 
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'Verified':
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700 uppercase tracking-wide">Verified</span>;
+      case 'Not Verified':
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-yellow-100 text-yellow-700 uppercase tracking-wide">Not Verified</span>;
+      case 'Invalid':
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 uppercase tracking-wide">Invalid</span>;
+      case 'Risky':
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 uppercase tracking-wide">Risky</span>;
+      default:
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-700 uppercase tracking-wide">{status}</span>;
+    }
+  };
+
   if (loading) {
     return (
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
@@ -79,7 +130,48 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading }) => {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-8">
+      {/* Stats Dashboard */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center space-x-4">
+          <div className="p-3 bg-blue-50 rounded-xl">
+            <Mail className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Leads</p>
+            <p className="text-xl font-black text-gray-900">{stats.total}</p>
+          </div>
+        </div>
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center space-x-4">
+          <div className="p-3 bg-green-50 rounded-xl">
+            <ShieldCheck className="w-5 h-5 text-green-600" />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Verified</p>
+            <p className="text-xl font-black text-gray-900">{stats.verified}</p>
+          </div>
+        </div>
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center space-x-4">
+          <div className="p-3 bg-yellow-50 rounded-xl">
+            <Shield className="w-5 h-5 text-yellow-600" />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Pending</p>
+            <p className="text-xl font-black text-gray-900">{stats.pending}</p>
+          </div>
+        </div>
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center space-x-4">
+          <div className="p-3 bg-red-50 rounded-xl">
+            <ShieldAlert className="w-5 h-5 text-red-600" />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Invalid/Risky</p>
+            <p className="text-xl font-black text-gray-900">{stats.invalid}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Controls */}
       <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
         <div className="relative w-full max-w-md">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -94,70 +186,83 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading }) => {
           />
         </div>
         
-        <button
-          onClick={downloadCSV}
-          disabled={filteredLeads.length === 0}
-          className="w-full sm:w-auto flex items-center justify-center space-x-2 px-6 py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition-all shadow-md active:transform active:scale-95 disabled:opacity-50"
-        >
-          <Download className="w-4 h-4" />
-          <span>Export CSV</span>
-        </button>
+        <div className="flex items-center space-x-3 w-full sm:w-auto">
+          <button
+            onClick={handleVerify}
+            disabled={isVerifying || stats.pending === 0}
+            className="flex-1 sm:flex-none flex items-center justify-center space-x-2 px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all shadow-md active:transform active:scale-95 disabled:opacity-50 disabled:bg-gray-400"
+          >
+            {isVerifying ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            ) : (
+              <Play className="w-4 h-4" />
+            )}
+            <span>{isVerifying ? 'Verifying...' : 'Verify Pending Leads'}</span>
+          </button>
+          
+          <button
+            onClick={downloadCSV}
+            disabled={filteredLeads.length === 0}
+            className="flex-1 sm:flex-none flex items-center justify-center space-x-2 px-6 py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition-all shadow-md active:transform active:scale-95 disabled:opacity-50"
+          >
+            <Download className="w-4 h-4" />
+            <span>Export CSV</span>
+          </button>
+        </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Company</th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Contact</th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Email / Status</th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Location</th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Links</th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Added</th>
+              <tr className="bg-gray-50/50 border-b border-gray-100">
+                <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-widest">Company</th>
+                <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-widest">Contact</th>
+                <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-widest">Email / Status</th>
+                <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-widest">Location</th>
+                <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-widest">Links</th>
+                <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-widest text-right">Added</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {filteredLeads.map((lead) => (
                 <tr key={lead.id} className="hover:bg-blue-50/30 transition-colors group">
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-6 py-5 whitespace-nowrap">
                     <div className="font-bold text-gray-900 group-hover:text-blue-700 transition-colors">
                       {lead.company}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-semibold text-gray-800">{lead.contact_name}</div>
-                    <div className="text-xs text-gray-500 truncate max-w-[180px]">{lead.title}</div>
+                  <td className="px-6 py-5 whitespace-nowrap">
+                    <div className="text-sm font-bold text-gray-800">{lead.contact_name}</div>
+                    <div className="text-xs text-gray-400 truncate max-w-[180px] font-medium">{lead.title}</div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-sm text-gray-700 font-medium">{lead.email}</span>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700 uppercase tracking-wide">
-                        {lead.status}
-                      </span>
+                  <td className="px-6 py-5 whitespace-nowrap">
+                    <div className="flex items-center space-x-3">
+                      <span className="text-sm text-gray-700 font-bold">{lead.email}</span>
+                      {getStatusBadge(lead.status)}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-600 font-medium">{lead.country}</div>
+                  <td className="px-6 py-5 whitespace-nowrap">
+                    <div className="text-sm text-gray-600 font-bold">{lead.country}</div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-3 text-gray-400">
+                  <td className="px-6 py-5 whitespace-nowrap">
+                    <div className="flex items-center space-x-3 text-gray-300">
                       {lead.website && lead.website !== 'N/A' && (
-                        <a href={lead.website} target="_blank" rel="noopener noreferrer" className="hover:text-blue-600">
+                        <a href={lead.website} target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">
                           <Globe className="w-4 h-4" />
                         </a>
                       )}
                       {lead.linkedin && (
-                        <a href={lead.linkedin} target="_blank" rel="noopener noreferrer" className="hover:text-blue-700">
+                        <a href={lead.linkedin} target="_blank" rel="noopener noreferrer" className="hover:text-blue-700 transition-colors">
                           <Linkedin className="w-4 h-4" />
                         </a>
                       )}
-                      <button className="hover:text-blue-600">
+                      <button className="hover:text-blue-600 transition-colors">
                         <ExternalLink className="w-4 h-4" />
                       </button>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
+                  <td className="px-6 py-5 whitespace-nowrap text-right text-xs font-bold text-gray-400 uppercase">
                     {(lead as any).created_at || (lead as any).date_added ? 
                       new Date((lead as any).created_at || (lead as any).date_added).toLocaleDateString() : 
                       'N/A'}
@@ -166,7 +271,7 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading }) => {
               ))}
               {filteredLeads.length === 0 && leads.length > 0 && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500 italic">
+                  <td colSpan={6} className="px-6 py-16 text-center text-gray-400 italic font-medium">
                     No results found for "{searchTerm}"
                   </td>
                 </tr>
