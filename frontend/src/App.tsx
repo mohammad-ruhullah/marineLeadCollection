@@ -149,7 +149,7 @@ function App() {
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
                   <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-start space-x-4">
                     <div className="p-3 bg-blue-50 rounded-xl">
                       <Search className="w-6 h-6 text-blue-600" />
@@ -167,16 +167,6 @@ function App() {
                     <div>
                       <span className="block text-sm font-medium text-gray-500 uppercase tracking-wider">DB Leads</span>
                       <span className="text-2xl font-bold text-gray-900">{leads.length}</span>
-                    </div>
-                  </div>
-
-                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-start space-x-4 opacity-50">
-                    <div className="p-3 bg-purple-50 rounded-xl">
-                      <Users className="w-6 h-6 text-purple-600" />
-                    </div>
-                    <div>
-                      <span className="block text-sm font-medium text-gray-500 uppercase tracking-wider">Campaigns</span>
-                      <span className="text-2xl font-bold text-gray-900">0</span>
                     </div>
                   </div>
                 </div>

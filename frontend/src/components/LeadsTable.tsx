@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { ExternalLink, Linkedin, Globe, Mail, Search as SearchIcon, Download, Shield, ShieldAlert, ShieldCheck, Play } from 'lucide-react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { ExternalLink, Linkedin, Globe, Mail, Search as SearchIcon, Download, Shield, ShieldAlert, ShieldCheck, Play, ChevronDown, X } from 'lucide-react';
 import { apolloApi } from '../services/api';
 import VerificationModal from './VerificationModal';
 
@@ -20,11 +20,119 @@ interface LeadsTableProps {
   leads: Lead[];
   loading: boolean;
   onRefresh: () => void;
+  filters?: any;
 }
 
-const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh }) => {
+const MultiSelectDropdown = ({ 
+  label, 
+  options, 
+  selected, 
+  setSelected, 
+  placeholder 
+}: { 
+  label: string, 
+  options: string[], 
+  selected: string[], 
+  setSelected: (val: string[]) => void,
+  placeholder: string
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  const toggleOption = (option: string) => {
+    if (selected.includes(option)) {
+      setSelected(selected.filter(item => item !== option));
+    } else {
+      setSelected([...selected, option]);
+    }
+  };
+
+  const getDisplayText = () => {
+    if (selected.length === 0) return placeholder;
+    if (selected.length === 1) return selected[0];
+    return `${selected.length} ${label}s`;
+  };
+
+  return (
+    <div className="relative w-full md:w-44" ref={containerRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-full flex items-center justify-between px-3 py-2.5 bg-white border ${selected.length > 0 ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-200'} rounded-xl shadow-sm text-xs font-bold text-gray-700 hover:border-blue-400 transition-all`}
+      >
+        <span className="truncate">{getDisplayText()}</span>
+        <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-2 bg-white border border-gray-100 rounded-xl shadow-xl max-h-64 overflow-y-auto">
+          <div className="p-2 space-y-1">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-50 mb-1">
+              <button
+                onClick={() => setSelected(options)}
+                className="text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors"
+              >
+                Select All
+              </button>
+              <button
+                onClick={() => setSelected([])}
+                className="text-xs font-bold text-gray-400 hover:text-red-600 transition-colors"
+              >
+                Clear
+              </button>
+            </div>
+            {options.map(option => (
+              <label 
+                key={option} 
+                className={`flex items-center px-3 py-2 rounded-lg cursor-pointer transition-colors ${selected.includes(option) ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50 text-gray-600'}`}
+              >
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                  checked={selected.includes(option)}
+                  onChange={() => toggleOption(option)}
+                />
+                <span className="text-sm font-medium truncate">{option}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filters = {} }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
+
+  // Extract unique values from the data
+  const availableCountries = useMemo(() => {
+    const countries = leads.map(l => l.country).filter(Boolean);
+    return Array.from(new Set(countries)).sort();
+  }, [leads]);
+
+  const availableRoles = useMemo(() => {
+    const roles = leads.map(l => l.title).filter(Boolean);
+    return Array.from(new Set(roles)).sort();
+  }, [leads]);
+
+  const availableStatuses = useMemo(() => {
+    const statuses = leads.map(l => l.status).filter(Boolean);
+    return Array.from(new Set(statuses)).sort();
+  }, [leads]);
 
   // Stats calculation
   const stats = useMemo(() => {
@@ -37,11 +145,34 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh }) =>
   }, [leads]);
 
   const filteredLeads = useMemo(() => {
-    return leads.filter((lead) => 
-      lead.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      lead.country.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [leads, searchTerm]);
+    return leads.filter((lead) => {
+      // 1. Sidebar Filters (Legacy support if still used)
+      if (filters.person_locations && filters.person_locations.length > 0) {
+        if (!filters.person_locations.includes(lead.country)) return false;
+      }
+      
+      if (filters.person_titles && filters.person_titles.length > 0) {
+        if (!filters.person_titles.includes(lead.title)) return false;
+      }
+
+      // 2. New Multi-Select Dropdown Filters
+      if (selectedCountries.length > 0 && !selectedCountries.includes(lead.country)) return false;
+      if (selectedRoles.length > 0 && !selectedRoles.includes(lead.title)) return false;
+      if (selectedStatuses.length > 0 && !selectedStatuses.includes(lead.status)) return false;
+
+      // 3. Search Term Filter
+      const search = searchTerm.toLowerCase();
+      const company = (lead.company || '').toLowerCase();
+      const country = (lead.country || '').toLowerCase();
+      const name = (lead.contact_name || '').toLowerCase();
+      const title = (lead.title || '').toLowerCase();
+      
+      return company.includes(search) || 
+             country.includes(search) || 
+             name.includes(search) || 
+             title.includes(search);
+    });
+  }, [leads, searchTerm, selectedCountries, selectedRoles, selectedStatuses, filters]);
 
   const handleVerify = () => {
     if (stats.pending === 0) {
@@ -165,37 +296,81 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh }) =>
       </div>
 
       {/* Controls */}
-      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-        <div className="relative w-full max-w-md">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <SearchIcon className="h-5 w-5 text-gray-400" />
+      <div className="flex flex-col gap-6">
+        {/* Row 1: Hero Search Bar */}
+        <div className="relative w-full">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <SearchIcon className="h-6 w-6 text-gray-400" />
           </div>
           <input
             type="text"
-            placeholder="Filter by company or country..."
-            className="block w-full pl-10 pr-3 py-3 border border-gray-200 rounded-xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all shadow-sm"
+            placeholder="Search leads by name, company, title, or country..."
+            className="block w-full pl-14 pr-4 py-4 border border-gray-200 rounded-2xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg transition-all shadow-sm font-medium"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        
-        <div className="flex items-center space-x-3 w-full sm:w-auto">
-          <button
-            onClick={handleVerify}
-            className="flex-1 sm:flex-none flex items-center justify-center space-x-2 px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all shadow-md active:transform active:scale-95 disabled:opacity-50 disabled:bg-gray-400"
-          >
-            <Play className="w-4 h-4" />
-            <span>Verify Pending Leads</span>
-          </button>
+
+        {/* Row 2: Filters & Actions */}
+        <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-end justify-between">
+          <div className="flex flex-wrap items-end gap-3 w-full lg:w-auto">
+            <MultiSelectDropdown 
+              label="Country"
+              options={availableCountries}
+              selected={selectedCountries}
+              setSelected={setSelectedCountries}
+              placeholder="All Countries"
+            />
+
+            <MultiSelectDropdown 
+              label="Role"
+              options={availableRoles}
+              selected={selectedRoles}
+              setSelected={setSelectedRoles}
+              placeholder="All Roles"
+            />
+
+            <MultiSelectDropdown 
+              label="Status"
+              options={availableStatuses}
+              selected={selectedStatuses}
+              setSelected={setSelectedStatuses}
+              placeholder="All Statuses"
+            />
+
+            {(searchTerm || selectedCountries.length > 0 || selectedRoles.length > 0 || selectedStatuses.length > 0) && (
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setSelectedCountries([]);
+                  setSelectedRoles([]);
+                  setSelectedStatuses([]);
+                }}
+                className="px-4 py-3 text-sm font-bold text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl transition-colors whitespace-nowrap"
+              >
+                Clear All
+              </button>
+            )}
+          </div>
           
-          <button
-            onClick={downloadCSV}
-            disabled={filteredLeads.length === 0}
-            className="flex-1 sm:flex-none flex items-center justify-center space-x-2 px-6 py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition-all shadow-md active:transform active:scale-95 disabled:opacity-50"
-          >
-            <Download className="w-4 h-4" />
-            <span>Export CSV</span>
-          </button>
+          <div className="flex items-center space-x-3 w-full lg:w-auto">
+            <button
+              onClick={handleVerify}
+              className="flex-1 lg:flex-none flex items-center justify-center space-x-2 px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all shadow-md active:transform active:scale-95 disabled:opacity-50 disabled:bg-gray-400"
+            >
+              <Play className="w-4 h-4" />
+              <span className="whitespace-nowrap">Verify Pending</span>
+            </button>
+            
+            <button
+              onClick={downloadCSV}
+              disabled={filteredLeads.length === 0}
+              className="flex-1 lg:flex-none flex items-center justify-center space-x-2 px-6 py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition-all shadow-md active:transform active:scale-95 disabled:opacity-50"
+            >
+              <Download className="w-4 h-4" />
+              <span className="whitespace-nowrap">Export CSV ({filteredLeads.length})</span>
+            </button>
+          </div>
         </div>
       </div>
 

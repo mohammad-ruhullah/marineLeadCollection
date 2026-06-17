@@ -46,30 +46,6 @@ const validateHunterConfig = (req, res, next) => {
 
 const router = express.Router();
 
-// Helper to check Apollo Credit Usage
-router.get('/apollo/credits', validateApolloConfig, async (req, res) => {
-  try {
-    const response = await axios({
-      method: 'get',
-      url: 'https://api.apollo.io/api/v1/auth/health',
-      headers: { 
-        'X-Api-Key': APOLLO_API_KEY,
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache'
-      }
-    });
-    
-    res.json({
-      total: response.data.total_credits || 0,
-      used: response.data.used_credits || 0,
-      remaining: (response.data.total_credits || 0) - (response.data.used_credits || 0)
-    });
-  } catch (error) {
-    console.error('Apollo health error:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Failed to fetch Apollo credits' });
-  }
-});
-
 // Pre-flight route: Get total count for filters
 router.post('/apollo/pre-flight', validateApolloConfig, async (req, res) => {
   const filters = req.body;
@@ -136,8 +112,26 @@ router.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
       
       if (personIds.length === 0) break;
 
-      for (let i = 0; i < personIds.length; i += maxBulkMatch) {
-        const batchIds = personIds.slice(i, i + maxBulkMatch);
+      // --- CREDIT SAVING LOGIC: Check database before enrichment ---
+      const { data: existingLeads, error: checkError } = await supabase
+        .from('leads')
+        .select('apollo_id')
+        .in('apollo_id', personIds);
+
+      if (checkError) console.error('Error checking existing leads:', checkError);
+      
+      const existingIds = new Set((existingLeads || []).map(l => l.apollo_id));
+      const newPersonIds = personIds.filter(id => !existingIds.has(id));
+
+      if (newPersonIds.length === 0) {
+        console.log(`All ${personIds.length} leads in this page already exist in DB. Skipping enrichment to save credits.`);
+        continue;
+      }
+
+      console.log(`Found ${newPersonIds.length} new leads to enrich (Skipped ${existingIds.size} existing).`);
+
+      for (let i = 0; i < newPersonIds.length; i += maxBulkMatch) {
+        const batchIds = newPersonIds.slice(i, i + maxBulkMatch);
         const details = batchIds.map(id => ({ id }));
         
         try {
