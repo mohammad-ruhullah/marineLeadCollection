@@ -5,7 +5,7 @@ import SearchModal from './components/SearchModal';
 import LeadsTable from './components/LeadsTable';
 import AdminSettings from './components/AdminSettings';
 import { apolloApi } from './services/api';
-import { Search, Database, Users, LayoutGrid, List, Settings } from 'lucide-react';
+import { Search, Database, LayoutGrid, List, Settings } from 'lucide-react';
 
 function App() {
   const [filters, setFilters] = useState<any>({});

@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { ExternalLink, Linkedin, Globe, Mail, Search as SearchIcon, Download, Shield, ShieldAlert, ShieldCheck, Play, ChevronDown, X } from 'lucide-react';
-import { apolloApi } from '../services/api';
+import { ExternalLink, Linkedin, Globe, Mail, Search as SearchIcon, Download, Shield, ShieldAlert, ShieldCheck, Play, ChevronDown } from 'lucide-react';
 import VerificationModal from './VerificationModal';
 
 interface Lead {
