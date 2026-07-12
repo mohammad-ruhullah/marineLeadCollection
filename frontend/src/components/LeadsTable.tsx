@@ -314,7 +314,7 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
             <ShieldAlert className="w-5 h-5 text-red-600" />
           </div>
           <div>
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Invalid/Risky</p>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Invalid</p>
             <p className="text-xl font-black text-gray-900">{stats.invalid}</p>
           </div>
         </div>
