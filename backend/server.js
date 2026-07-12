@@ -215,38 +215,34 @@ router.post('/apollo/leads/verify', validateHunterConfig, async (req, res) => {
       return res.json({ success: true, message: 'No leads pending verification', processed: 0 });
     }
 
-    console.log(`Processing batch of ${leads.length} leads.`);
+    console.log(`Processing batch of ${leads.length} leads in parallel.`);
     let processedCount = 0;
 
-    // 2. Process each lead
-    for (const lead of leads) {
+    // 2. Process all leads in parallel
+    const verifyOneLead = async (lead) => {
       if (!lead.email) {
-        // Skip leads without email
         await supabase
           .from('leads')
           .update({ status: 'Invalid' })
           .eq('apollo_id', lead.apollo_id);
-        continue;
+        return 1;
       }
 
       try {
-        // Call Hunter.io API
         const response = await axios({
           method: 'get',
           url: `https://api.hunter.io/v2/email-verifier?email=${encodeURIComponent(lead.email)}&api_key=${HUNTER_API_KEY}`,
-          timeout: 10000 // 10 second timeout for individual email
+          timeout: 10000
         });
 
         const hunterData = response.data ? response.data.data : null;
         
         if (!hunterData || !hunterData.result) {
-          console.log(`Hunter.io returned no result for ${lead.email}, marking as No Result Found.`);
           await supabase
             .from('leads')
             .update({ status: 'No Result Found' })
             .eq('apollo_id', lead.apollo_id);
-          processedCount++; // Count as processed to move the progress bar
-          continue;
+          return 1;
         }
 
         let newStatus = 'Risky';
@@ -256,44 +252,41 @@ router.post('/apollo/leads/verify', validateHunterConfig, async (req, res) => {
           newStatus = 'Invalid';
         }
 
-        // 3. Update Supabase
         await supabase
           .from('leads')
           .update({ status: newStatus })
           .eq('apollo_id', lead.apollo_id);
 
-        processedCount++;
         console.log(`Verified ${lead.email}: ${newStatus}`);
-
-        // Small delay to respect rate limits
-        await new Promise(resolve => setTimeout(resolve, 150)); 
+        return 1;
 
       } catch (hunterError) {
-        // Handle 202 Accepted (processing) or other non-200 responses
         if (hunterError.response?.status === 202) {
-          console.log(`Hunter.io still processing ${lead.email}, marking as No Result Found.`);
           await supabase
             .from('leads')
             .update({ status: 'No Result Found' })
             .eq('apollo_id', lead.apollo_id);
-          processedCount++;
-          continue;
+          return 1;
         }
         
         console.error(`Hunter.io error for ${lead.email}:`, hunterError.response?.data || hunterError.message);
         
-        // Mark as "No Result Found" even on error to prevent infinite loops
         await supabase
             .from('leads')
             .update({ status: 'No Result Found' })
             .eq('apollo_id', lead.apollo_id);
-        processedCount++;
 
         if (hunterError.response?.status === 401 || hunterError.response?.status === 403) {
           throw new Error('Hunter.io API Key is invalid or restricted');
         }
+        return 1;
       }
-    }
+    };
+
+    const results = await Promise.allSettled(leads.map(lead => verifyOneLead(lead)));
+    processedCount = results.filter(r => r.status === 'fulfilled').reduce((sum, r) => sum + r.value, 0);
+
+    await new Promise(resolve => setTimeout(resolve, 150));
 
     res.json({ success: true, processed: processedCount });
   } catch (error) {
