@@ -85,13 +85,15 @@ router.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
   try {
     const { filters, maxLeads, category } = req.body;
     let totalSaved = 0;
+    let totalSkipped = 0;
     const perPage = 100;
     const maxBulkMatch = 10;
-    const pagesToFetch = Math.ceil(Math.min(maxLeads, 1000) / perPage);
+    const MAX_SAFE_PAGES = 50;
+    let page = 1;
 
-    console.log(`--- BULK FETCH START: targeting ${maxLeads} leads ---`);
+    console.log(`--- BULK FETCH START: targeting ${maxLeads} new leads ---`);
 
-    for (let page = 1; page <= pagesToFetch; page++) {
+    while (totalSaved < maxLeads && page <= MAX_SAFE_PAGES) {
       const searchResponse = await axios({
         method: 'post',
         url: 'https://api.apollo.io/api/v1/mixed_people/api_search',
@@ -110,7 +112,10 @@ router.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
       const people = searchResponse.data.people || [];
       const personIds = people.map(p => p.id);
       
-      if (personIds.length === 0) break;
+      if (personIds.length === 0) {
+        console.log('No more leads from Apollo. Stopping.');
+        break;
+      }
 
       // --- CREDIT SAVING LOGIC: Check database before enrichment ---
       const { data: existingLeads, error: checkError } = await supabase
@@ -122,13 +127,15 @@ router.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
       
       const existingIds = new Set((existingLeads || []).map(l => l.apollo_id));
       const newPersonIds = personIds.filter(id => !existingIds.has(id));
+      totalSkipped += existingIds.size;
 
       if (newPersonIds.length === 0) {
-        console.log(`All ${personIds.length} leads in this page already exist in DB. Skipping enrichment to save credits.`);
+        console.log(`Page ${page}: All ${personIds.length} leads already exist. Skipping.`);
+        page++;
         continue;
       }
 
-      console.log(`Found ${newPersonIds.length} new leads to enrich (Skipped ${existingIds.size} existing).`);
+      console.log(`Page ${page}: ${newPersonIds.length} new leads (skipped ${existingIds.size} existing). Total new so far: ${totalSaved}`);
 
       for (let i = 0; i < newPersonIds.length; i += maxBulkMatch) {
         const batchIds = newPersonIds.slice(i, i + maxBulkMatch);
@@ -151,6 +158,7 @@ router.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
           const matchedPeople = enrichResponse.data.matches || enrichResponse.data.people || [];
           if (matchedPeople.length === 0) continue;
 
+          const remaining = maxLeads - totalSaved;
           const leadsToUpsert = matchedPeople.map(person => ({
             apollo_id: person.id,
             company: person.organization?.name || 'Unknown',
@@ -162,7 +170,7 @@ router.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
             website: person.organization?.website_url || 'N/A',
             linkedin: person.linkedin_url || person.organization?.linkedin_url || '',
             category: category || null
-          })).slice(0, Math.min(matchedPeople.length, maxLeads - totalSaved));
+          })).slice(0, Math.min(matchedPeople.length, remaining));
 
           const { error } = await supabase
             .from('leads')
@@ -179,9 +187,10 @@ router.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
         }
       }
       
-      if (totalSaved >= maxLeads) break;
+      page++;
     }
 
+    console.log(`--- BULK FETCH END: saved ${totalSaved} new leads (skipped ${totalSkipped} existing) ---`);
     res.json({ success: true, total_saved: totalSaved });
   } catch (error) {
     console.error('Apollo bulk fetch process error:', error.message);
