@@ -13,6 +13,7 @@ interface Lead {
   website: string;
   linkedin: string;
   date_added: string;
+  category?: string;
 }
 
 interface LeadsTableProps {
@@ -63,7 +64,7 @@ const MultiSelectDropdown = ({
   };
 
   return (
-    <div className="relative w-full md:w-44" ref={containerRef}>
+    <div className="relative w-full md:w-56" ref={containerRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`w-full flex items-center justify-between px-3 py-2.5 bg-white border ${selected.length > 0 ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-200'} rounded-xl shadow-sm text-xs font-bold text-gray-700 hover:border-blue-400 transition-all`}
@@ -100,7 +101,7 @@ const MultiSelectDropdown = ({
                   checked={selected.includes(option)}
                   onChange={() => toggleOption(option)}
                 />
-                <span className="text-sm font-medium truncate">{option}</span>
+                <span className="text-sm font-medium">{option}</span>
               </label>
             ))}
           </div>
@@ -110,11 +111,15 @@ const MultiSelectDropdown = ({
   );
 };
 
+const ITEMS_PER_PAGE = 50;
+
 const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filters = {} }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
   const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
 
   // Extract unique values from the data
@@ -131,6 +136,11 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
   const availableStatuses = useMemo(() => {
     const statuses = leads.map(l => l.status).filter(Boolean);
     return Array.from(new Set(statuses)).sort();
+  }, [leads]);
+
+  const availableCategories = useMemo(() => {
+    const cats = leads.map(l => l.category).filter(Boolean) as string[];
+    return Array.from(new Set(cats)).sort();
   }, [leads]);
 
   // Stats calculation
@@ -158,6 +168,7 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
       if (selectedCountries.length > 0 && !selectedCountries.includes(lead.country)) return false;
       if (selectedRoles.length > 0 && !selectedRoles.includes(lead.title)) return false;
       if (selectedStatuses.length > 0 && !selectedStatuses.includes(lead.status)) return false;
+      if (selectedCategories.length > 0 && !selectedCategories.includes(lead.category || '')) return false;
 
       // 3. Search Term Filter
       const search = searchTerm.toLowerCase();
@@ -165,13 +176,27 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
       const country = (lead.country || '').toLowerCase();
       const name = (lead.contact_name || '').toLowerCase();
       const title = (lead.title || '').toLowerCase();
+      const categoryText = (lead.category || '').toLowerCase();
       
       return company.includes(search) || 
              country.includes(search) || 
              name.includes(search) || 
-             title.includes(search);
+             title.includes(search) ||
+             categoryText.includes(search);
     });
-  }, [leads, searchTerm, selectedCountries, selectedRoles, selectedStatuses, filters]);
+  }, [leads, searchTerm, selectedCountries, selectedRoles, selectedStatuses, selectedCategories, filters]);
+
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(filteredLeads.length / ITEMS_PER_PAGE)), [filteredLeads]);
+
+  const paginatedLeads = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredLeads.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredLeads, currentPage]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedCountries, selectedRoles, selectedStatuses, selectedCategories]);
 
   const handleVerify = () => {
     if (stats.pending === 0) {
@@ -187,7 +212,7 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
   };
 
   const downloadCSV = () => {
-    const headers = ['Company', 'Contact Name', 'Title', 'Email', 'Status', 'Country', 'Website', 'LinkedIn', 'Date Added'];
+    const headers = ['Company', 'Contact Name', 'Title', 'Email', 'Status', 'Country', 'Website', 'LinkedIn', 'Date Added', 'Category'];
     const csvContent = [
       headers.join(','),
       ...filteredLeads.map(lead => [
@@ -199,7 +224,8 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
         `"${lead.country}"`,
         `"${lead.website}"`,
         `"${lead.linkedin}"`,
-        `"${(lead as any).created_at || lead.date_added ? new Date((lead as any).created_at || lead.date_added).toLocaleDateString() : 'N/A'}"`
+        `"${(lead as any).created_at || lead.date_added ? new Date((lead as any).created_at || lead.date_added).toLocaleDateString() : 'N/A'}"`,
+        `"${lead.category || ''}"`
       ].join(','))
     ].join('\n');
 
@@ -337,13 +363,24 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
               placeholder="All Statuses"
             />
 
-            {(searchTerm || selectedCountries.length > 0 || selectedRoles.length > 0 || selectedStatuses.length > 0) && (
+            {availableCategories.length > 0 && (
+              <MultiSelectDropdown 
+                label="Category"
+                options={availableCategories}
+                selected={selectedCategories}
+                setSelected={setSelectedCategories}
+                placeholder="All Categories"
+              />
+            )}
+
+            {(searchTerm || selectedCountries.length > 0 || selectedRoles.length > 0 || selectedStatuses.length > 0 || selectedCategories.length > 0) && (
               <button
                 onClick={() => {
                   setSearchTerm('');
                   setSelectedCountries([]);
                   setSelectedRoles([]);
                   setSelectedStatuses([]);
+                  setSelectedCategories([]);
                 }}
                 className="px-4 py-3 text-sm font-bold text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl transition-colors whitespace-nowrap"
               >
@@ -381,6 +418,56 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
         onComplete={onRefresh}
       />
 
+      {/* Pagination Info */}
+      {filteredLeads.length > 0 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-gray-500 font-medium">
+            Showing <span className="font-bold text-gray-700">{(currentPage - 1) * ITEMS_PER_PAGE + 1}</span> 
+            {' '}-{' '}
+            <span className="font-bold text-gray-700">{Math.min(currentPage * ITEMS_PER_PAGE, filteredLeads.length)}</span>
+            {' '}of{' '}
+            <span className="font-bold text-gray-700">{filteredLeads.length}</span> leads
+          </p>
+          
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage <= 1}
+              className="px-3 py-1.5 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Previous
+            </button>
+            
+            {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+              const startPage = Math.max(1, currentPage - 3);
+              const page = startPage + i;
+              if (page > totalPages) return null;
+              return (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`w-9 h-9 text-sm font-bold rounded-lg transition-colors ${
+                    page === currentPage
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-600 bg-white border border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  {page}
+                </button>
+              );
+            })}
+            
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages}
+              className="px-3 py-1.5 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -390,12 +477,13 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
                 <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-widest">Contact</th>
                 <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-widest">Email / Status</th>
                 <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-widest">Location</th>
+                <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-widest">Category</th>
                 <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-widest">Links</th>
                 <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-widest text-right">Added</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filteredLeads.map((lead) => (
+              {paginatedLeads.map((lead) => (
                 <tr key={lead.id} className="hover:bg-blue-50/30 transition-colors group">
                   <td className="px-6 py-5 whitespace-nowrap">
                     <div className="font-bold text-gray-900 group-hover:text-blue-700 transition-colors">
@@ -414,6 +502,13 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
                   </td>
                   <td className="px-6 py-5 whitespace-nowrap">
                     <div className="text-sm text-gray-600 font-bold">{lead.country}</div>
+                  </td>
+                  <td className="px-6 py-5 whitespace-nowrap">
+                    {lead.category ? (
+                      <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 uppercase tracking-wide">{lead.category}</span>
+                    ) : (
+                      <span className="text-xs text-gray-300 italic">—</span>
+                    )}
                   </td>
                   <td className="px-6 py-5 whitespace-nowrap">
                     <div className="flex items-center space-x-3 text-gray-300">
@@ -441,7 +536,7 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
               ))}
               {filteredLeads.length === 0 && leads.length > 0 && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-16 text-center text-gray-400 italic font-medium">
+                  <td colSpan={7} className="px-6 py-16 text-center text-gray-400 italic font-medium">
                     No results found for "{searchTerm}"
                   </td>
                 </tr>

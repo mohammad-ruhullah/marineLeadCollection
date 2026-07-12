@@ -64,10 +64,10 @@ function App() {
     }
   }, [filters]);
 
-  const handleConfirmFetch = async (maxLeads: number) => {
+  const handleConfirmFetch = async (maxLeads: number, category: string) => {
     setIsFetching(true);
     try {
-      const result = await apolloApi.bulkFetch(filters, maxLeads);
+      const result = await apolloApi.bulkFetch(filters, maxLeads, category);
       setFetchResult(result);
       fetchLeads(); // Refresh leads table after fetch
     } catch (error) {

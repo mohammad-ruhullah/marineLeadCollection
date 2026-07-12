@@ -7,8 +7,8 @@ export const apolloApi = {
     const response = await axios.post(`${API_BASE_URL}/apollo/pre-flight`, filters);
     return response.data;
   },
-  bulkFetch: async (filters: any, maxLeads: number) => {
-    const response = await axios.post(`${API_BASE_URL}/apollo/bulk-fetch`, { filters, maxLeads });
+  bulkFetch: async (filters: any, maxLeads: number, category?: string) => {
+    const response = await axios.post(`${API_BASE_URL}/apollo/bulk-fetch`, { filters, maxLeads, category });
     return response.data;
   },
   getSettings: async () => {

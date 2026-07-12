@@ -5,7 +5,7 @@ interface SearchModalProps {
   isOpen: boolean;
   onClose: () => void;
   totalEntries: number;
-  onConfirm: (maxLeads: number) => void;
+  onConfirm: (maxLeads: number, category: string) => void;
   isFetching: boolean;
   fetchResult: { success: boolean; total_saved: number } | null;
 }
@@ -19,6 +19,7 @@ const SearchModal: React.FC<SearchModalProps> = ({
   fetchResult
 }) => {
   const [maxLeads, setMaxLeads] = useState<number>(Math.min(100, totalEntries));
+  const [category, setCategory] = useState<string>('');
 
   if (!isOpen) return null;
 
@@ -43,7 +44,7 @@ const SearchModal: React.FC<SearchModalProps> = ({
                 </div>
               </div>
 
-              <div className="mb-6">
+              <div className="mb-4">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Max Leads to Import
                 </label>
@@ -60,8 +61,21 @@ const SearchModal: React.FC<SearchModalProps> = ({
                 </p>
               </div>
 
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Category (optional)
+                </label>
+                <input
+                  type="text"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  placeholder="e.g. A, B, Vessel Side, Service Side"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-lg font-medium"
+                />
+              </div>
+
               <button
-                onClick={() => onConfirm(maxLeads)}
+                onClick={() => onConfirm(maxLeads, category)}
                 disabled={isFetching || maxLeads <= 0}
                 className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 transition-all shadow-lg flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >

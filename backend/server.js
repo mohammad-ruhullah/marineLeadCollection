@@ -83,7 +83,7 @@ router.post('/apollo/pre-flight', validateApolloConfig, async (req, res) => {
 // Bulk Fetch route: Fetch and save leads in batches
 router.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
   try {
-    const { filters, maxLeads } = req.body;
+    const { filters, maxLeads, category } = req.body;
     let totalSaved = 0;
     const perPage = 100;
     const maxBulkMatch = 10;
@@ -160,7 +160,8 @@ router.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
             status: 'Not Verified',
             country: person.country || person.organization?.country || 'Unknown',
             website: person.organization?.website_url || 'N/A',
-            linkedin: person.linkedin_url || person.organization?.linkedin_url || ''
+            linkedin: person.linkedin_url || person.organization?.linkedin_url || '',
+            category: category || null
           })).slice(0, Math.min(matchedPeople.length, maxLeads - totalSaved));
 
           const { error } = await supabase
