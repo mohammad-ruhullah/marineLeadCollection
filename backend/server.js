@@ -245,10 +245,8 @@ router.post('/apollo/leads/verify', validateHunterConfig, async (req, res) => {
           return 1;
         }
 
-        let newStatus = 'Risky';
-        if (hunterData.result === 'deliverable') {
-          newStatus = 'Verified';
-        } else if (hunterData.result === 'undeliverable') {
+        let newStatus = 'Verified';
+        if (hunterData.result === 'undeliverable') {
           newStatus = 'Invalid';
         }
 

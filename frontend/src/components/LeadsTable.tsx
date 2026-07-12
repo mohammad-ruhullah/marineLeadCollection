@@ -149,7 +149,7 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
       total: leads.length,
       verified: leads.filter(l => l.status === 'Verified').length,
       pending: leads.filter(l => l.status === 'Not Verified').length,
-      invalid: leads.filter(l => l.status === 'Invalid' || l.status === 'Risky' || l.status === 'No Result Found').length,
+      invalid: leads.filter(l => l.status === 'Invalid' || l.status === 'No Result Found').length,
     };
   }, [leads]);
 
