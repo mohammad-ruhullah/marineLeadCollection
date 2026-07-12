@@ -305,14 +305,26 @@ router.post('/apollo/leads/verify', validateHunterConfig, async (req, res) => {
 router.get('/leads', async (req, res) => {
   try {
     console.log('Fetching leads from Supabase...');
-    const { data, error } = await supabase
-      .from('leads')
-      .select('*');
-      
-    if (error) throw error;
+    const pageSize = 1000;
+    let allData = [];
+    let start = 0;
+
+    while (true) {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .range(start, start + pageSize - 1);
+
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+
+      allData = allData.concat(data);
+      if (data.length < pageSize) break;
+      start += pageSize;
+    }
     
     // Sort manually in JS to be safe against missing columns in DB order
-    const sortedData = (data || []).sort((a, b) => {
+    const sortedData = allData.sort((a, b) => {
       const dateA = new Date(a.created_at || a.date_added || a.id || 0).getTime();
       const dateB = new Date(b.created_at || b.date_added || b.id || 0).getTime();
       return dateB - dateA;
