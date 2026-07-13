@@ -211,25 +211,31 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
     onRefresh(); // Refresh data whenever modal closes to ensure latest status
   };
 
+  const csvEscape = (value: any) => {
+    const str = String(value ?? '');
+    return `"${str.replace(/"/g, '""')}"`;
+  };
+
   const downloadCSV = () => {
     const headers = ['Company', 'Contact Name', 'Title', 'Email', 'Status', 'Country', 'Website', 'LinkedIn', 'Date Added', 'Category'];
+    const BOM = '\uFEFF';
     const csvContent = [
       headers.join(','),
       ...filteredLeads.map(lead => [
-        `"${lead.company}"`,
-        `"${lead.contact_name}"`,
-        `"${lead.title}"`,
-        `"${lead.email}"`,
-        `"${lead.status}"`,
-        `"${lead.country}"`,
-        `"${lead.website}"`,
-        `"${lead.linkedin}"`,
-        `"${(lead as any).created_at || lead.date_added ? new Date((lead as any).created_at || lead.date_added).toLocaleDateString() : 'N/A'}"`,
-        `"${lead.category || ''}"`
+        csvEscape(lead.company),
+        csvEscape(lead.contact_name),
+        csvEscape(lead.title),
+        csvEscape(lead.email),
+        csvEscape(lead.status),
+        csvEscape(lead.country),
+        csvEscape(lead.website),
+        csvEscape(lead.linkedin),
+        csvEscape((lead as any).created_at || lead.date_added ? new Date((lead as any).created_at || lead.date_added).toLocaleDateString() : 'N/A'),
+        csvEscape(lead.category || '')
       ].join(','))
     ].join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
