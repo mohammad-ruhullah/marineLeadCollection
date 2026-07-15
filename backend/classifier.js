@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || '').trim();
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent';
 
 const marineTitles = [
   'Technical Superintendent', 'Fleet Manager', 'Technical Manager',
