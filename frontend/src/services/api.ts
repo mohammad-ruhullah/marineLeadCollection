@@ -3,6 +3,18 @@ import axios from 'axios';
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 export const apolloApi = {
+  previewLeads: async (filters: any, targetLeads: number) => {
+    const response = await axios.post(`${API_BASE_URL}/apollo/preview`, { filters, targetLeads });
+    return response.data;
+  },
+  saveLeads: async (leads: any[], category: string) => {
+    const response = await axios.post(`${API_BASE_URL}/apollo/save-leads`, { leads, category });
+    return response.data;
+  },
+  enrichEmails: async (limit?: number) => {
+    const response = await axios.post(`${API_BASE_URL}/apollo/enrich-emails`, { limit });
+    return response.data;
+  },
   preFlight: async (filters: any) => {
     const response = await axios.post(`${API_BASE_URL}/apollo/pre-flight`, filters);
     return response.data;

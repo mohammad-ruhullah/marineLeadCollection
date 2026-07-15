@@ -44,7 +44,201 @@ const validateHunterConfig = (req, res, next) => {
   next();
 };
 
+const { classifyLead } = require('./classifier');
+
 const router = express.Router();
+
+// Preview route: Fetch, dedup, classify, loop until targetLeads met (FREE - no enrichment cost)
+router.post('/apollo/preview', validateApolloConfig, async (req, res) => {
+  try {
+    const { filters, targetLeads = 100 } = req.body;
+    let collected = [];
+    const perPage = 100;
+    const MAX_SAFE_PAGES = 50;
+    let page = 1;
+
+    console.log(`--- PREVIEW START: targeting ${targetLeads} new leads ---`);
+
+    while (collected.length < targetLeads && page <= MAX_SAFE_PAGES) {
+      const searchResponse = await axios({
+        method: 'post',
+        url: 'https://api.apollo.io/api/v1/mixed_people/api_search',
+        headers: {
+          'X-Api-Key': APOLLO_API_KEY,
+          'Content-Type': 'application/json'
+        },
+        data: {
+          ...filters,
+          page: page,
+          per_page: perPage,
+          contact_email_status_v2: ["verified"]
+        }
+      });
+
+      const people = searchResponse.data.people || [];
+      if (people.length === 0) {
+        console.log('No more leads from Apollo. Stopping.');
+        break;
+      }
+
+      const personIds = people.map(p => p.id);
+      const { data: existingLeads, error: checkError } = await supabase
+        .from('leads')
+        .select('apollo_id')
+        .in('apollo_id', personIds);
+
+      if (checkError) console.error('Error checking existing leads:', checkError);
+      const existingIds = new Set((existingLeads || []).map(l => l.apollo_id));
+
+      const newPeople = people.filter(p => !existingIds.has(p.id));
+      console.log(`Page ${page}: ${newPeople.length} new out of ${people.length} (${existingIds.size} skipped)`);
+
+      for (const person of newPeople) {
+        if (collected.length >= targetLeads) break;
+        const classification = await classifyLead(person.title, person.organization?.name || '');
+        collected.push({
+          apollo_id: person.id,
+          name: person.name,
+          title: person.title,
+          company: person.organization?.name || 'Unknown',
+          country: person.country || person.organization?.country || 'Unknown',
+          is_marine: classification.is_marine,
+          classification_source: classification.source
+        });
+      }
+
+      page++;
+    }
+
+    const classifierSource = collected.some(l => l.classification_source === 'ai') ? 'ai' : 'rules';
+    console.log(`--- PREVIEW END: collected ${collected.length} new leads (classifier: ${classifierSource}) ---`);
+    res.json({
+      target: targetLeads,
+      total_found: collected.length,
+      classifier: classifierSource,
+      leads: collected
+    });
+  } catch (error) {
+    console.error('Preview error:', error.response?.data || error.message);
+    res.status(500).json({ error: error.message || 'Failed to preview leads' });
+  }
+});
+
+// Save leads route: Save previewed leads to DB without emails (FREE - no enrichment cost)
+router.post('/apollo/save-leads', validateApolloConfig, async (req, res) => {
+  try {
+    const { leads, category } = req.body;
+    if (!leads || !Array.isArray(leads) || leads.length === 0) {
+      return res.status(400).json({ error: 'No leads provided' });
+    }
+
+    console.log(`--- SAVE LEADS START: ${leads.length} leads ---`);
+
+    const leadsToInsert = leads.map(lead => ({
+      apollo_id: lead.apollo_id,
+      company: lead.company || 'Unknown',
+      contact_name: lead.name || '',
+      title: lead.title || '',
+      email: '',
+      status: 'Not Enriched',
+      country: lead.country || 'Unknown',
+      website: '',
+      linkedin: '',
+      category: category || null
+    }));
+
+    // Check for existing leads to avoid overwriting enriched data
+    const ids = leadsToInsert.map(l => l.apollo_id);
+    const { data: existingLeads, error: checkError } = await supabase
+      .from('leads')
+      .select('apollo_id')
+      .in('apollo_id', ids);
+
+    if (checkError) console.error('Error checking existing leads:', checkError);
+    const existingIds = new Set((existingLeads || []).map(l => l.apollo_id));
+    const trulyNew = leadsToInsert.filter(l => !existingIds.has(l.apollo_id));
+
+    if (trulyNew.length === 0) {
+      return res.json({ success: true, total_saved: 0 });
+    }
+
+    const { error } = await supabase
+      .from('leads')
+      .upsert(trulyNew, { onConflict: 'apollo_id' });
+
+    if (error) throw error;
+    console.log(`--- SAVE LEADS END: saved ${trulyNew.length} leads ---`);
+    res.json({ success: true, total_saved: trulyNew.length });
+  } catch (error) {
+    console.error('Save leads error:', error.message);
+    res.status(500).json({ error: error.message || 'Failed to save leads' });
+  }
+});
+
+// Enrich emails route: Apollo bulk_match for leads with status "Not Enriched" (costs credits)
+router.post('/apollo/enrich-emails', validateApolloConfig, async (req, res) => {
+  try {
+    const { limit = 100 } = req.body;
+    console.log(`--- ENRICH EMAILS START: processing up to ${limit} leads ---`);
+
+    const { data: leads, error } = await supabase
+      .from('leads')
+      .select('*')
+      .eq('status', 'Not Enriched')
+      .limit(limit);
+
+    if (error) throw error;
+    if (!leads || leads.length === 0) {
+      return res.json({ success: true, processed: 0 });
+    }
+
+    const apolloIds = leads.map(l => l.apollo_id);
+    const maxBulkMatch = 10;
+    let totalProcessed = 0;
+
+    for (let i = 0; i < apolloIds.length; i += maxBulkMatch) {
+      const batchIds = apolloIds.slice(i, i + maxBulkMatch);
+      const details = batchIds.map(id => ({ id }));
+
+      try {
+        const enrichResponse = await axios({
+          method: 'post',
+          url: 'https://api.apollo.io/api/v1/people/bulk_match',
+          headers: {
+            'X-Api-Key': APOLLO_API_KEY,
+            'Content-Type': 'application/json'
+          },
+          data: {
+            details: details,
+            reveal_personal_emails: true
+          }
+        });
+
+        const matchedPeople = enrichResponse.data.matches || enrichResponse.data.people || [];
+        for (const person of matchedPeople) {
+          await supabase
+            .from('leads')
+            .update({
+              email: person.email || '',
+              linkedin: person.linkedin_url || person.organization?.linkedin_url || '',
+              website: person.organization?.website_url || 'N/A',
+              status: 'Not Verified'
+            })
+            .eq('apollo_id', person.id);
+          totalProcessed++;
+        }
+      } catch (enrichError) {
+        console.error('Enrichment batch error:', enrichError.response?.data || enrichError.message);
+      }
+    }
+
+    console.log(`--- ENRICH EMAILS END: processed ${totalProcessed} leads ---`);
+    res.json({ success: true, processed: totalProcessed });
+  } catch (error) {
+    console.error('Enrich emails error:', error.message);
+    res.status(500).json({ error: error.message || 'Failed to enrich emails' });
+  }
+});
 
 // Pre-flight route: Get total count for filters
 router.post('/apollo/pre-flight', validateApolloConfig, async (req, res) => {

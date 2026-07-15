@@ -11,10 +11,11 @@ function App() {
   const [filters, setFilters] = useState<any>({});
   console.log('App rendering, filters:', filters);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [totalEntries, setTotalEntries] = useState(0);
   const [isCalculating, setIsCalculating] = useState(false);
-  const [isFetching, setIsFetching] = useState(false);
-  const [fetchResult, setFetchResult] = useState<{ success: boolean; total_saved: number } | null>(null);
+  const [previewData, setPreviewData] = useState<any>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveResult, setSaveResult] = useState<{ success: boolean; total_saved: number } | null>(null);
+  const [targetLeads, setTargetLeads] = useState(500);
   
   const [leads, setLeads] = useState<any[]>([]);
   const [leadsLoading, setLeadsLoading] = useState(true);
@@ -42,39 +43,39 @@ function App() {
   const handleCalculate = useCallback(async () => {
     console.log('handleCalculate triggered with filters:', filters);
     
-    // Validation: Check if at least one filter category is selected
     if (!filters || Object.keys(filters).length === 0) {
       alert('Please select at least one filter category before calculating leads.');
       return;
     }
 
     setIsCalculating(true);
-    setFetchResult(null);
+    setPreviewData(null);
+    setSaveResult(null);
     try {
-      const data = await apolloApi.preFlight(filters);
-      console.log('Pre-flight response data:', data);
-      setTotalEntries(data.total_entries || 0);
+      const data = await apolloApi.previewLeads(filters, targetLeads);
+      console.log('Preview response:', data);
+      setPreviewData(data);
       setIsModalOpen(true);
     } catch (error: any) {
-      console.error('Error in pre-flight calculation:', error);
+      console.error('Error in preview:', error);
       const errorMsg = error.response?.data?.error || error.message;
-      alert(`Failed to calculate leads: ${errorMsg}`);
+      alert(`Failed to preview leads: ${errorMsg}`);
     } finally {
       setIsCalculating(false);
     }
-  }, [filters]);
+  }, [filters, targetLeads]);
 
-  const handleConfirmFetch = async (maxLeads: number, category: string) => {
-    setIsFetching(true);
+  const handleSaveLeads = async (selectedLeads: any[], category: string) => {
+    setIsSaving(true);
     try {
-      const result = await apolloApi.bulkFetch(filters, maxLeads, category);
-      setFetchResult(result);
-      fetchLeads(); // Refresh leads table after fetch
-    } catch (error) {
-      console.error('Error in bulk fetch:', error);
-      alert('Failed to import leads. Please check console.');
+      const result = await apolloApi.saveLeads(selectedLeads, category);
+      setSaveResult(result);
+      fetchLeads();
+    } catch (error: any) {
+      console.error('Error saving leads:', error);
+      alert('Failed to save leads. Please check console.');
     } finally {
-      setIsFetching(false);
+      setIsSaving(false);
     }
   };
 
@@ -183,15 +184,26 @@ function App() {
                     <h3 className="text-2xl font-bold text-gray-900 mb-4">
                       {isCalculating ? 'Scanning Apollo Database...' : 'Ready to find new leads?'}
                     </h3>
-                    <p className="text-gray-600 max-w-lg mx-auto mb-8">
-                      Configure your target audience in the sidebar. Once you click calculate, we'll verify availability before you commit any credits.
+                    <p className="text-gray-600 max-w-lg mx-auto mb-6">
+                      Configure your target audience in the sidebar. We'll preview leads before using any credits.
                     </p>
+                    <div className="flex items-center justify-center space-x-4 mb-6">
+                      <label className="text-sm font-semibold text-gray-700">Target Leads:</label>
+                      <input
+                        type="number"
+                        value={targetLeads}
+                        onChange={e => setTargetLeads(Math.max(1, parseInt(e.target.value) || 0))}
+                        className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-lg font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        min="1"
+                        max="5000"
+                      />
+                    </div>
                     <button
                       onClick={handleCalculate}
                       disabled={isCalculating}
                       className="inline-flex items-center px-8 py-4 bg-blue-600 text-white font-bold rounded-2xl hover:bg-blue-700 transition-all shadow-xl hover:shadow-2xl active:transform active:scale-95 disabled:opacity-50"
                     >
-                      {isCalculating ? 'Calculating...' : 'Start Lead Calculation'}
+                      {isCalculating ? 'Previewing...' : 'Preview Leads'}
                     </button>
                   </div>
                 </div>
@@ -231,11 +243,11 @@ function App() {
 
       <SearchModal 
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        totalEntries={totalEntries}
-        onConfirm={handleConfirmFetch}
-        isFetching={isFetching}
-        fetchResult={fetchResult}
+        onClose={() => { setIsModalOpen(false); setPreviewData(null); setSaveResult(null); }}
+        previewData={previewData}
+        onSave={handleSaveLeads}
+        isSaving={isSaving}
+        saveResult={saveResult}
       />
     </div>
   );
