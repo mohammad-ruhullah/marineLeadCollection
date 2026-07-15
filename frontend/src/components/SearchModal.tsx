@@ -69,6 +69,7 @@ const SearchModal: React.FC<SearchModalProps> = ({
 
   const leads = previewData.leads;
   const marineCount = leads.filter(l => l.is_marine).length;
+  const nonMarineCount = leads.length - marineCount;
   const totalPages = Math.ceil(leads.length / ITEMS_PER_PAGE);
   const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;
   const pageLeads = leads.slice(startIdx, startIdx + ITEMS_PER_PAGE);
@@ -102,7 +103,33 @@ const SearchModal: React.FC<SearchModalProps> = ({
     }
   };
 
+  const toggleAllNonMarine = () => {
+    const nonMarineIds = leads.filter(l => !l.is_marine).map(l => l.apollo_id);
+    const allNonMarineSelected = nonMarineIds.every(id => selectedIds.has(id));
+    if (allNonMarineSelected) {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        nonMarineIds.forEach(id => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        nonMarineIds.forEach(id => next.add(id));
+        return next;
+      });
+    }
+  };
+
+  const allNonMarineSelected = leads.filter(l => !l.is_marine).every(l => selectedIds.has(l.apollo_id));
+
   const toggleAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(leads.map(l => l.apollo_id)));
+    }
+  };
     if (allSelected) {
       setSelectedIds(new Set());
     } else {
@@ -168,6 +195,18 @@ const SearchModal: React.FC<SearchModalProps> = ({
               >
                 {allMarineSelected ? 'Deselect Marine' : `Select Marine (${marineCount})`}
               </button>
+              {nonMarineCount > 0 && (
+                <button
+                  onClick={toggleAllNonMarine}
+                  className={`px-4 py-2 text-xs font-bold rounded-lg border transition-colors ${
+                    allNonMarineSelected
+                      ? 'bg-amber-50 text-amber-700 border-amber-300'
+                      : 'bg-white text-gray-600 border-gray-300 hover:border-amber-300'
+                  }`}
+                >
+                  {allNonMarineSelected ? 'Deselect Non-Marine' : `Select Non-Marine (${nonMarineCount})`}
+                </button>
+              )}
               <button
                 onClick={toggleAll}
                 className={`px-4 py-2 text-xs font-bold rounded-lg border transition-colors ${
@@ -199,7 +238,7 @@ const SearchModal: React.FC<SearchModalProps> = ({
                 <tr
                   key={lead.apollo_id}
                   className={`hover:bg-gray-50 transition-colors cursor-pointer ${
-                    lead.is_marine ? '' : 'opacity-60'
+                    lead.is_marine ? '' : 'opacity-80'
                   }`}
                   onClick={() => toggleSelect(lead.apollo_id)}
                 >
