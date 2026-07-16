@@ -207,6 +207,7 @@ router.post('/apollo/enrich-emails', validateApolloConfig, async (req, res) => {
     const apolloIds = leads.map(l => l.apollo_id);
     const maxBulkMatch = 10;
     let totalProcessed = 0;
+    let lastError = null;
 
     for (let i = 0; i < apolloIds.length; i += maxBulkMatch) {
       const batchIds = apolloIds.slice(i, i + maxBulkMatch);
@@ -223,7 +224,8 @@ router.post('/apollo/enrich-emails', validateApolloConfig, async (req, res) => {
           data: {
             details: details,
             reveal_personal_emails: true
-          }
+          },
+          timeout: 30000
         });
 
         const matchedPeople = enrichResponse.data.matches || enrichResponse.data.people || [];
@@ -240,11 +242,15 @@ router.post('/apollo/enrich-emails', validateApolloConfig, async (req, res) => {
           totalProcessed++;
         }
       } catch (enrichError) {
-        console.error('Enrichment batch error:', enrichError.response?.data || enrichError.message);
+        lastError = enrichError.response?.data?.error || enrichError.message;
+        console.error('Enrichment batch error:', lastError);
       }
     }
 
     console.log(`--- ENRICH EMAILS END: processed ${totalProcessed} leads ---`);
+    if (totalProcessed === 0 && lastError) {
+      return res.status(500).json({ error: `Enrichment failed: ${lastError}` });
+    }
     res.json({ success: true, processed: totalProcessed });
   } catch (error) {
     console.error('Enrich emails error:', error.message);

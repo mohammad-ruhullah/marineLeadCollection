@@ -71,7 +71,8 @@ const SelectionModal: React.FC<SelectionModalProps> = ({ isOpen, onClose, title,
       setProcessed(result?.processed ?? selected.length);
       setIsFinished(true);
     } catch (err: any) {
-      setError(err.message || 'Operation failed');
+      setError(err.response?.data?.error || err.message || 'Operation failed');
+      setIsFinished(false);
     } finally {
       setIsProcessing(false);
     }
@@ -95,6 +96,21 @@ const SelectionModal: React.FC<SelectionModalProps> = ({ isOpen, onClose, title,
           </div>
           <h4 className="text-xl font-bold text-gray-800 mb-2">Complete!</h4>
           <p className="text-gray-600 mb-6">Processed {processed} leads.</p>
+          <button onClick={onClose} className="w-full py-4 bg-gray-900 text-white font-bold rounded-2xl">Close</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden p-8 text-center">
+          <div className="mx-auto w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4">
+            <ShieldAlert className="w-10 h-10 text-red-600" />
+          </div>
+          <h4 className="text-xl font-bold text-gray-800 mb-2">Error</h4>
+          <p className="text-red-600 mb-6">{error}</p>
           <button onClick={onClose} className="w-full py-4 bg-gray-900 text-white font-bold rounded-2xl">Close</button>
         </div>
       </div>
