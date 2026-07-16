@@ -215,6 +215,7 @@ router.post('/apollo/enrich-emails', validateApolloConfig, async (req, res) => {
       const details = batchIds.map(id => ({ id }));
 
       try {
+        console.log(`DEBUG: Calling bulk_match with ${batchIds.length} IDs: ${batchIds[0]}...`);
         const enrichResponse = await axios({
           method: 'post',
           url: 'https://api.apollo.io/api/v1/people/bulk_match',
@@ -229,18 +230,25 @@ router.post('/apollo/enrich-emails', validateApolloConfig, async (req, res) => {
           timeout: 30000
         });
 
+        console.log(`DEBUG: bulk_match status: ${enrichResponse.status}, has matches: ${!!enrichResponse.data.matches}, has people: ${!!enrichResponse.data.people}`);
         const matchedPeople = enrichResponse.data.matches || enrichResponse.data.people || [];
-        for (const person of matchedPeople) {
-          await supabase
-            .from('leads')
-            .update({
-              email: person.email || '',
-              linkedin: person.linkedin_url || person.organization?.linkedin_url || '',
-              website: person.organization?.website_url || 'N/A',
-              status: 'Not Verified'
-            })
-            .eq('apollo_id', person.id);
-          totalProcessed++;
+        console.log(`DEBUG: matchedPeople count: ${matchedPeople.length}`);
+        if (matchedPeople.length === 0) {
+          console.log(`WARNING: No matches returned for batch. Response keys: ${Object.keys(enrichResponse.data).join(', ')}`);
+        } else {
+          console.log(`DEBUG: First match: ${matchedPeople[0].name || 'unnamed'} - email: ${matchedPeople[0].email || 'none'}`);
+          for (const person of matchedPeople) {
+            await supabase
+              .from('leads')
+              .update({
+                email: person.email || '',
+                linkedin: person.linkedin_url || person.organization?.linkedin_url || '',
+                website: person.organization?.website_url || 'N/A',
+                status: 'Not Verified'
+              })
+              .eq('apollo_id', person.id);
+            totalProcessed++;
+          }
         }
       } catch (enrichError) {
         lastError = enrichError.response?.data?.error || enrichError.message;
