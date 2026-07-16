@@ -7,6 +7,7 @@ interface LeadItem {
   title: string;
   company: string;
   email?: string;
+  category?: string;
 }
 
 interface SelectionModalProps {
@@ -27,6 +28,7 @@ const SelectionModal: React.FC<SelectionModalProps> = ({ isOpen, onClose, title,
   const [isFinished, setIsFinished] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [processed, setProcessed] = useState(0);
+  const [categoryFilter, setCategoryFilter] = useState('');
 
   useEffect(() => {
     if (isOpen) {
@@ -35,15 +37,26 @@ const SelectionModal: React.FC<SelectionModalProps> = ({ isOpen, onClose, title,
       setIsFinished(false);
       setError(null);
       setProcessed(0);
+      setCategoryFilter('');
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const totalPages = Math.ceil(leads.length / ITEMS_PER_PAGE);
+  const availableCategories = useMemo(() => {
+    const cats = leads.map(l => l.category).filter(Boolean) as string[];
+    return Array.from(new Set(cats)).sort();
+  }, [leads]);
+
+  const filteredLeads = useMemo(() => {
+    if (!categoryFilter) return leads;
+    return leads.filter(l => l.category === categoryFilter);
+  }, [leads, categoryFilter]);
+
+  const totalPages = Math.ceil(filteredLeads.length / ITEMS_PER_PAGE);
   const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;
-  const pageLeads = leads.slice(startIdx, startIdx + ITEMS_PER_PAGE);
-  const allSelected = leads.every(l => selectedIds.has(l.apollo_id));
+  const pageLeads = filteredLeads.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+  const allSelected = filteredLeads.every(l => selectedIds.has(l.apollo_id));
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
@@ -57,7 +70,7 @@ const SelectionModal: React.FC<SelectionModalProps> = ({ isOpen, onClose, title,
     if (allSelected) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(leads.map(l => l.apollo_id)));
+      setSelectedIds(new Set(filteredLeads.map(l => l.apollo_id)));
     }
   };
 
@@ -123,15 +136,27 @@ const SelectionModal: React.FC<SelectionModalProps> = ({ isOpen, onClose, title,
         <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center shrink-0">
           <div>
             <h3 className="text-xl font-bold text-gray-800">{title}</h3>
-            <p className="text-sm text-gray-500 mt-1">{leads.length} leads available</p>
+            <p className="text-sm text-gray-500 mt-1">
+              {filteredLeads.length === leads.length
+                ? `${leads.length} leads available`
+                : `${filteredLeads.length} of ${leads.length} leads`}
+            </p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-6 h-6" /></button>
         </div>
 
         <div className="px-6 py-3 border-b border-gray-100 shrink-0">
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-3">
+            <select
+              value={categoryFilter}
+              onChange={e => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold text-gray-600 bg-white focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Categories</option>
+              {availableCategories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
             <button onClick={toggleAll} className={`px-4 py-2 text-xs font-bold rounded-lg border transition-colors ${allSelected ? 'bg-blue-50 text-blue-700 border-blue-300' : 'bg-white text-gray-600 border-gray-300'}`}>
-              {allSelected ? 'Deselect All' : `Select All (${leads.length})`}
+              {allSelected ? 'Deselect All' : `Select All (${filteredLeads.length})`}
             </button>
             <span className="text-xs text-gray-400">{selectedIds.size} selected</span>
           </div>
@@ -146,6 +171,7 @@ const SelectionModal: React.FC<SelectionModalProps> = ({ isOpen, onClose, title,
                 <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase">Title</th>
                 <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase">Company</th>
                 <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase">Email</th>
+                <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase">Category</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -158,6 +184,13 @@ const SelectionModal: React.FC<SelectionModalProps> = ({ isOpen, onClose, title,
                   <td className="px-4 py-3 text-sm text-gray-600 truncate max-w-[200px]">{lead.title}</td>
                   <td className="px-4 py-3 text-sm text-gray-700">{lead.company}</td>
                   <td className="px-4 py-3 text-sm text-gray-500">{lead.email || '—'}</td>
+                  <td className="px-4 py-3">
+                    {lead.category ? (
+                      <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 uppercase">{lead.category}</span>
+                    ) : (
+                      <span className="text-xs text-gray-300">—</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
