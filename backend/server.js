@@ -71,6 +71,7 @@ router.post('/apollo/preview', validateApolloConfig, async (req, res) => {
           ...filters,
           page: page,
           per_page: perPage,
+          q_organization_name: "ship OR marine OR maritime OR offshore OR tanker OR fleet OR vessel OR shipping OR ferry OR tug OR supply",
           contact_email_status_v2: ["verified"]
         }
       });
@@ -248,8 +249,8 @@ router.post('/apollo/enrich-emails', validateApolloConfig, async (req, res) => {
     }
 
     console.log(`--- ENRICH EMAILS END: processed ${totalProcessed} leads ---`);
-    if (totalProcessed === 0 && lastError) {
-      return res.status(500).json({ error: `Enrichment failed: ${lastError}` });
+    if (totalProcessed === 0 && leads.length > 0) {
+      return res.status(500).json({ error: lastError || 'Enrichment returned no results. Check API key credits and permissions.' });
     }
     res.json({ success: true, processed: totalProcessed });
   } catch (error) {
@@ -317,6 +318,7 @@ router.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
           ...filters,
           page: page,
           per_page: perPage,
+          q_organization_name: "ship OR marine OR maritime OR offshore OR tanker OR fleet OR vessel OR shipping OR ferry OR tug OR supply",
           contact_email_status_v2: ["verified"]
         }
       });
