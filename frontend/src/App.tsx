@@ -15,7 +15,7 @@ function App() {
   const [previewData, setPreviewData] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<{ success: boolean; total_saved: number } | null>(null);
-  const [targetLeads, setTargetLeads] = useState(500);
+  const [targetLeads, setTargetLeads] = useState<string>('');
   
   const [leads, setLeads] = useState<any[]>([]);
   const [leadsLoading, setLeadsLoading] = useState(true);
@@ -47,12 +47,17 @@ function App() {
       alert('Please select at least one filter category before calculating leads.');
       return;
     }
+    const target = parseInt(targetLeads);
+    if (!target || target < 1) {
+      alert('Please enter a valid number of leads to preview.');
+      return;
+    }
 
     setIsCalculating(true);
     setPreviewData(null);
     setSaveResult(null);
     try {
-      const data = await apolloApi.previewLeads(filters, targetLeads);
+      const data = await apolloApi.previewLeads(filters, target);
       console.log('Preview response:', data);
       setPreviewData(data);
       setIsModalOpen(true);
@@ -192,15 +197,15 @@ function App() {
                       <input
                         type="number"
                         value={targetLeads}
-                        onChange={e => setTargetLeads(Math.max(1, parseInt(e.target.value) || 0))}
-                        className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-lg font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        onChange={e => setTargetLeads(e.target.value)}
+                        placeholder="e.g. 500"
+                        className="w-28 px-3 py-2 border border-gray-300 rounded-lg text-center text-lg font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         min="1"
-                        max="5000"
                       />
                     </div>
                     <button
                       onClick={handleCalculate}
-                      disabled={isCalculating}
+                      disabled={isCalculating || !parseInt(targetLeads)}
                       className="inline-flex items-center px-8 py-4 bg-blue-600 text-white font-bold rounded-2xl hover:bg-blue-700 transition-all shadow-xl hover:shadow-2xl active:transform active:scale-95 disabled:opacity-50"
                     >
                       {isCalculating ? 'Previewing...' : 'Preview Leads'}

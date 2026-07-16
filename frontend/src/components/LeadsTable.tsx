@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { ExternalLink, Linkedin, Globe, Mail, Search as SearchIcon, Download, Shield, ShieldAlert, ShieldCheck, Play, ChevronDown, Loader2, CheckCircle2 } from 'lucide-react';
-import VerificationModal from './VerificationModal';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { ExternalLink, Linkedin, Globe, Mail, Search as SearchIcon, Download, Shield, ShieldAlert, ShieldCheck, ChevronDown } from 'lucide-react';
+import SelectionModal from './SelectionModal';
 import { apolloApi } from '../services/api';
 
 interface Lead {
@@ -112,87 +112,6 @@ const MultiSelectDropdown = ({
   );
 };
 
-const EnrichmentModal = ({ totalPending, onClose }: { totalPending: number; onClose: () => void }) => {
-  const [processed, setProcessed] = useState(0);
-  const [isEnriching, setIsEnriching] = useState(false);
-  const [isFinished, setIsFinished] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const batchSize = 100;
-
-  const startEnrichment = useCallback(async () => {
-    setIsEnriching(true);
-    setError(null);
-    let totalProcessed = 0;
-    const total = totalPending;
-
-    while (totalProcessed < total) {
-      try {
-        const result = await apolloApi.enrichEmails(batchSize);
-        if (result.success && result.processed > 0) {
-          totalProcessed += result.processed;
-          setProcessed(totalProcessed);
-        } else {
-          break;
-        }
-      } catch (err: any) {
-        const msg = err.response?.data?.error || err.message || 'Enrichment failed';
-        setError(msg);
-        setIsEnriching(false);
-        return;
-      }
-    }
-
-    setIsEnriching(false);
-    setIsFinished(true);
-  }, [totalPending]);
-
-  useEffect(() => {
-    startEnrichment();
-  }, []);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden">
-        <div className="px-6 py-6 border-b border-gray-100">
-          <h3 className="text-xl font-bold text-gray-900">Email Enrichment</h3>
-        </div>
-        <div className="p-8 text-center">
-          {isFinished ? (
-            <>
-              <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                <CheckCircle2 className="w-10 h-10 text-green-600" />
-              </div>
-              <h4 className="text-xl font-bold text-gray-800 mb-2">Enrichment Complete!</h4>
-              <p className="text-gray-600 mb-6">Processed {processed} leads.</p>
-              <button onClick={onClose} className="w-full py-4 bg-gray-900 text-white font-bold rounded-2xl">Close</button>
-            </>
-          ) : error ? (
-            <>
-              <div className="mx-auto w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4">
-                <ShieldAlert className="w-10 h-10 text-red-600" />
-              </div>
-              <h4 className="text-lg font-bold text-gray-900 mb-2">Error</h4>
-              <p className="text-red-600 mb-6">{error}</p>
-              <button onClick={onClose} className="w-full py-4 bg-gray-100 text-gray-800 font-bold rounded-2xl">Close</button>
-            </>
-          ) : (
-            <>
-              <p className="text-gray-600 mb-6">Fetching emails for {totalPending} leads...</p>
-              <div className="flex items-center justify-center space-x-2 text-blue-600 mb-4">
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span className="text-sm font-bold">Processing {processed}/{totalPending}</span>
-              </div>
-              <div className="w-full bg-gray-100 rounded-full h-3">
-                <div className="bg-blue-600 h-3 rounded-full transition-all duration-300" style={{ width: totalPending > 0 ? `${(processed / totalPending) * 100}%` : '0%' }}></div>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const ITEMS_PER_PAGE = 50;
 
 const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filters = {} }) => {
@@ -203,7 +122,8 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
-  const [isEnrichmentModalOpen, setIsEnrichmentModalOpen] = useState(false);
+  const [isSelectionModalOpen, setIsSelectionModalOpen] = useState(false);
+  const [selectionModalMode, setSelectionModalMode] = useState<'enrich' | 'verify'>('enrich');
 
   // Extract unique values from the data
   const availableCountries = useMemo(() => {
@@ -290,7 +210,8 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
       alert('No leads pending verification.');
       return;
     }
-    setIsVerificationModalOpen(true);
+    setSelectionModalMode('verify');
+    setIsSelectionModalOpen(true);
   };
 
   const handleEnrich = () => {
@@ -298,11 +219,16 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
       alert('No leads pending email enrichment.');
       return;
     }
-    setIsEnrichmentModalOpen(true);
+    setSelectionModalMode('enrich');
+    setIsSelectionModalOpen(true);
   };
 
-  const handleEnrichmentComplete = () => {
-    setIsEnrichmentModalOpen(false);
+  const handleSelectionAction = async (ids: string[]) => {
+    if (selectionModalMode === 'enrich') {
+      await apolloApi.enrichEmails(ids);
+    } else {
+      await apolloApi.verifyLeads(ids);
+    }
     onRefresh();
   };
 
@@ -382,7 +308,7 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
   return (
     <div className="space-y-8">
       {/* Stats Dashboard */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center space-x-4">
           <div className="p-3 bg-blue-50 rounded-xl">
             <Mail className="w-5 h-5 text-blue-600" />
@@ -402,6 +328,18 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
           </div>
         </div>
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center space-x-4">
+          <div className="p-3 bg-red-50 rounded-xl">
+            <ShieldAlert className="w-5 h-5 text-red-600" />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Invalid</p>
+            <p className="text-xl font-black text-gray-900">{stats.invalid}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center space-x-4">
           <div className="p-3 bg-amber-50 rounded-xl">
             <Mail className="w-5 h-5 text-amber-600" />
           </div>
@@ -418,13 +356,20 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
           </button>
         </div>
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center space-x-4">
-          <div className="p-3 bg-red-50 rounded-xl">
-            <ShieldAlert className="w-5 h-5 text-red-600" />
+          <div className="p-3 bg-yellow-50 rounded-xl">
+            <Shield className="w-5 h-5 text-yellow-600" />
           </div>
-          <div>
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Invalid</p>
-            <p className="text-xl font-black text-gray-900">{stats.invalid}</p>
+          <div className="flex-1">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Pending Verification</p>
+            <p className="text-xl font-black text-gray-900">{stats.pendingVerification}</p>
           </div>
+          <button
+            onClick={handleVerify}
+            disabled={stats.pendingVerification === 0}
+            className="px-3 py-1.5 bg-yellow-600 text-white text-xs font-bold rounded-lg hover:bg-yellow-700 transition-colors disabled:opacity-40 whitespace-nowrap"
+          >
+            Verify
+          </button>
         </div>
       </div>
 
@@ -499,14 +444,6 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
           
           <div className="flex items-center space-x-3 w-full lg:w-auto">
             <button
-              onClick={handleVerify}
-              className="flex-1 lg:flex-none flex items-center justify-center space-x-2 px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all shadow-md active:transform active:scale-95 disabled:opacity-50 disabled:bg-gray-400"
-            >
-              <Play className="w-4 h-4" />
-              <span className="whitespace-nowrap">Verify Pending</span>
-            </button>
-            
-            <button
               onClick={downloadCSV}
               disabled={filteredLeads.length === 0}
               className="flex-1 lg:flex-none flex items-center justify-center space-x-2 px-6 py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition-all shadow-md active:transform active:scale-95 disabled:opacity-50"
@@ -518,21 +455,18 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
         </div>
       </div>
 
-      {/* Verification Modal */}
-      <VerificationModal 
-        isOpen={isVerificationModalOpen}
-        onClose={() => { setIsVerificationModalOpen(false); onRefresh(); }}
-        totalPending={stats.pendingVerification}
-        onComplete={onRefresh}
+      {/* Selection Modal */}
+      <SelectionModal
+        isOpen={isSelectionModalOpen}
+        onClose={() => { setIsSelectionModalOpen(false); onRefresh(); }}
+        title={selectionModalMode === 'enrich' ? 'Email Enrichment' : 'Email Verification'}
+        leads={selectionModalMode === 'enrich'
+          ? leads.filter(l => l.status === 'Not Enriched').map(l => ({ ...l, contact_name: l.contact_name }))
+          : leads.filter(l => l.status === 'Not Verified').map(l => ({ ...l, contact_name: l.contact_name }))
+        }
+        actionLabel={selectionModalMode === 'enrich' ? 'Enrich Selected' : 'Verify Selected'}
+        onAction={handleSelectionAction}
       />
-
-      {/* Enrichment Modal */}
-      {isEnrichmentModalOpen && (
-        <EnrichmentModal
-          totalPending={stats.pendingEmail}
-          onClose={handleEnrichmentComplete}
-        />
-      )}
 
       {/* Pagination Info */}
       {filteredLeads.length > 0 && (

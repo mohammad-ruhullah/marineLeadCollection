@@ -98,7 +98,7 @@ router.post('/apollo/preview', validateApolloConfig, async (req, res) => {
         const classification = await classifyLead(person.title, person.organization?.name || '');
         collected.push({
           apollo_id: person.id,
-          name: person.name,
+          name: `${person.first_name || ''} ${(person.last_name_obfuscated || '').replace('***', '')}`.trim() || person.name || '',
           title: person.title,
           company: person.organization?.name || 'Unknown',
           country: person.country || person.organization?.country || 'Unknown',
@@ -178,19 +178,31 @@ router.post('/apollo/save-leads', validateApolloConfig, async (req, res) => {
 // Enrich emails route: Apollo bulk_match for leads with status "Not Enriched" (costs credits)
 router.post('/apollo/enrich-emails', validateApolloConfig, async (req, res) => {
   try {
-    const { limit = 100 } = req.body;
-    console.log(`--- ENRICH EMAILS START: processing up to ${limit} leads ---`);
+    const { limit = 100, ids } = req.body;
+    let leads;
 
-    const { data: leads, error } = await supabase
-      .from('leads')
-      .select('*')
-      .eq('status', 'Not Enriched')
-      .limit(limit);
+    if (ids && Array.isArray(ids) && ids.length > 0) {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .in('apollo_id', ids);
+      if (error) throw error;
+      leads = data || [];
+    } else {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('status', 'Not Enriched')
+        .limit(limit);
+      if (error) throw error;
+      leads = data || [];
+    }
 
-    if (error) throw error;
     if (!leads || leads.length === 0) {
       return res.json({ success: true, processed: 0 });
     }
+
+    console.log(`--- ENRICH EMAILS START: ${leads.length} leads ---`);
 
     const apolloIds = leads.map(l => l.apollo_id);
     const maxBulkMatch = 10;
@@ -394,17 +406,26 @@ router.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
 
 router.post('/apollo/leads/verify', validateHunterConfig, async (req, res) => {
   try {
-    const { limit = 5 } = req.body; // Default to 5 if not provided
-    console.log(`--- STARTING HUNTER.IO VERIFICATION (BATCH SIZE: ${limit}) ---`);
-    
-    // 1. Fetch leads with "Not Verified" status with a limit
-    const { data: leads, error } = await supabase
-      .from('leads')
-      .select('*')
-      .eq('status', 'Not Verified')
-      .limit(limit);
+    const { limit = 5, ids } = req.body;
+    let leads;
 
-    if (error) throw error;
+    if (ids && Array.isArray(ids) && ids.length > 0) {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .in('apollo_id', ids);
+      if (error) throw error;
+      leads = data || [];
+    } else {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('status', 'Not Verified')
+        .limit(limit);
+      if (error) throw error;
+      leads = data || [];
+    }
+
     if (!leads || leads.length === 0) {
       return res.json({ success: true, message: 'No leads pending verification', processed: 0 });
     }

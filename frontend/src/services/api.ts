@@ -11,8 +11,8 @@ export const apolloApi = {
     const response = await axios.post(`${API_BASE_URL}/apollo/save-leads`, { leads, category });
     return response.data;
   },
-  enrichEmails: async (limit?: number) => {
-    const response = await axios.post(`${API_BASE_URL}/apollo/enrich-emails`, { limit });
+  enrichEmails: async (ids?: string[]) => {
+    const response = await axios.post(`${API_BASE_URL}/apollo/enrich-emails`, ids ? { ids, limit: ids.length } : {});
     return response.data;
   },
   preFlight: async (filters: any) => {
@@ -39,8 +39,8 @@ export const apolloApi = {
     const response = await axios.delete(`${API_BASE_URL}/settings/${id}`);
     return response.data;
   },
-  verifyLeads: async (limit?: number) => {
-    const response = await axios.post(`${API_BASE_URL}/apollo/leads/verify`, { limit });
+  verifyLeads: async (ids?: string[]) => {
+    const response = await axios.post(`${API_BASE_URL}/apollo/leads/verify`, ids ? { ids } : {});
     return response.data;
   }
 };

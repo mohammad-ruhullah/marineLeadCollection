@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { X, CheckCircle2, Loader2, ChevronLeft, ChevronRight, Sparkles, AlertCircle } from 'lucide-react';
 
 interface PreviewLead {
@@ -39,6 +39,15 @@ const SearchModal: React.FC<SearchModalProps> = ({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
 
+  // Auto-select marine leads when preview opens
+  useEffect(() => {
+    if (previewData?.leads) {
+      const marineIds = previewData.leads.filter(l => l.is_marine).map(l => l.apollo_id);
+      setSelectedIds(new Set(marineIds));
+      setCurrentPage(1);
+    }
+  }, [previewData]);
+
   if (!isOpen) return null;
 
   if (saveResult) {
@@ -74,7 +83,6 @@ const SearchModal: React.FC<SearchModalProps> = ({
   const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;
   const pageLeads = leads.slice(startIdx, startIdx + ITEMS_PER_PAGE);
 
-  const allMarineSelected = leads.filter(l => l.is_marine).every(l => selectedIds.has(l.apollo_id));
   const allSelected = leads.every(l => selectedIds.has(l.apollo_id));
 
   const toggleSelect = (id: string) => {
@@ -85,51 +93,7 @@ const SearchModal: React.FC<SearchModalProps> = ({
     });
   };
 
-  const toggleAllMarine = () => {
-    if (allMarineSelected) {
-      const marineIds = leads.filter(l => l.is_marine).map(l => l.apollo_id);
-      setSelectedIds(prev => {
-        const next = new Set(prev);
-        marineIds.forEach(id => next.delete(id));
-        return next;
-      });
-    } else {
-      const marineIds = leads.filter(l => l.is_marine).map(l => l.apollo_id);
-      setSelectedIds(prev => {
-        const next = new Set(prev);
-        marineIds.forEach(id => next.add(id));
-        return next;
-      });
-    }
-  };
-
-  const toggleAllNonMarine = () => {
-    const nonMarineIds = leads.filter(l => !l.is_marine).map(l => l.apollo_id);
-    const allNonMarineSelected = nonMarineIds.every(id => selectedIds.has(id));
-    if (allNonMarineSelected) {
-      setSelectedIds(prev => {
-        const next = new Set(prev);
-        nonMarineIds.forEach(id => next.delete(id));
-        return next;
-      });
-    } else {
-      setSelectedIds(prev => {
-        const next = new Set(prev);
-        nonMarineIds.forEach(id => next.add(id));
-        return next;
-      });
-    }
-  };
-
-  const allNonMarineSelected = leads.filter(l => !l.is_marine).every(l => selectedIds.has(l.apollo_id));
-
   const toggleAll = () => {
-    if (allSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(leads.map(l => l.apollo_id)));
-    }
-  };
     if (allSelected) {
       setSelectedIds(new Set());
     } else {
@@ -172,41 +136,31 @@ const SearchModal: React.FC<SearchModalProps> = ({
           </button>
         </div>
 
-        <div className="px-6 py-4 border-b border-gray-100 shrink-0">
+            <div className="px-6 py-4 border-b border-gray-100 shrink-0">
           <div className="flex items-center space-x-4">
             <div className="flex-1 max-w-xs">
-              <label className="block text-xs font-semibold text-gray-700 mb-1">Category</label>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Category <span className="text-red-500">*</span></label>
               <input
                 type="text"
                 value={category}
                 onChange={e => setCategory(e.target.value)}
-                placeholder="e.g. A, B"
+                placeholder="Select or type: A, B..."
+                list="category-options"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
+              <datalist id="category-options">
+                <option value="A" />
+                <option value="B" />
+              </datalist>
             </div>
             <div className="flex items-center space-x-2 pt-5">
-              <button
-                onClick={toggleAllMarine}
-                className={`px-4 py-2 text-xs font-bold rounded-lg border transition-colors ${
-                  allMarineSelected
-                    ? 'bg-green-50 text-green-700 border-green-300'
-                    : 'bg-white text-gray-600 border-gray-300 hover:border-green-300'
-                }`}
-              >
-                {allMarineSelected ? 'Deselect Marine' : `Select Marine (${marineCount})`}
-              </button>
-              {nonMarineCount > 0 && (
-                <button
-                  onClick={toggleAllNonMarine}
-                  className={`px-4 py-2 text-xs font-bold rounded-lg border transition-colors ${
-                    allNonMarineSelected
-                      ? 'bg-amber-50 text-amber-700 border-amber-300'
-                      : 'bg-white text-gray-600 border-gray-300 hover:border-amber-300'
-                  }`}
-                >
-                  {allNonMarineSelected ? 'Deselect Non-Marine' : `Select Non-Marine (${nonMarineCount})`}
-                </button>
-              )}
+              <span className={`inline-flex items-center px-3 py-1.5 text-xs font-bold rounded-lg border transition-colors ${
+                allSelected
+                  ? 'border-green-300 bg-green-50 text-green-700'
+                  : 'border-gray-300 bg-gray-50 text-gray-500'
+              }`}>
+                Selected Marine ({selectedIds.size})
+              </span>
               <button
                 onClick={toggleAll}
                 className={`px-4 py-2 text-xs font-bold rounded-lg border transition-colors ${
@@ -319,7 +273,13 @@ const SearchModal: React.FC<SearchModalProps> = ({
               </div>
 
               <button
-                onClick={() => onSave(leads.filter(l => selectedIds.has(l.apollo_id)), category)}
+                onClick={() => {
+                  if (!category.trim()) {
+                    alert('Please select or create a category before saving.');
+                    return;
+                  }
+                  onSave(leads.filter(l => selectedIds.has(l.apollo_id)), category);
+                }}
                 disabled={selectedIds.size === 0 || isSaving}
                 className="px-6 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all shadow-md disabled:opacity-50 flex items-center space-x-2"
               >
