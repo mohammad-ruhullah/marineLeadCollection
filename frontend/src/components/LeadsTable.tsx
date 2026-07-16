@@ -225,11 +225,10 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
 
   const handleSelectionAction = async (ids: string[]) => {
     if (selectionModalMode === 'enrich') {
-      await apolloApi.enrichEmails(ids);
+      return await apolloApi.enrichEmails(ids);
     } else {
-      await apolloApi.verifyLeads(ids);
+      return await apolloApi.verifyLeads(ids);
     }
-    onRefresh();
   };
 
   const csvEscape = (value: any) => {

@@ -15,7 +15,7 @@ interface SelectionModalProps {
   title: string;
   leads: LeadItem[];
   actionLabel: string;
-  onAction: (ids: string[]) => Promise<void>;
+  onAction: (ids: string[]) => Promise<{ processed: number } | void>;
 }
 
 const ITEMS_PER_PAGE = 50;
@@ -36,7 +36,7 @@ const SelectionModal: React.FC<SelectionModalProps> = ({ isOpen, onClose, title,
       setError(null);
       setProcessed(0);
     }
-  }, [isOpen, leads]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -67,8 +67,8 @@ const SelectionModal: React.FC<SelectionModalProps> = ({ isOpen, onClose, title,
     setIsProcessing(true);
     setError(null);
     try {
-      await onAction(selected);
-      setProcessed(selected.length);
+      const result = await onAction(selected);
+      setProcessed(result?.processed ?? selected.length);
       setIsFinished(true);
     } catch (err: any) {
       setError(err.message || 'Operation failed');
