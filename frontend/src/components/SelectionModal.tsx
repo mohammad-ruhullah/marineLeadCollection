@@ -32,7 +32,7 @@ const SelectionModal: React.FC<SelectionModalProps> = ({ isOpen, onClose, title,
 
   useEffect(() => {
     if (isOpen) {
-      setSelectedIds(new Set(safeLeads.map(l => l.apollo_id)));
+      setSelectedIds(new Set((leads || []).map(l => l.apollo_id)));
       setCurrentPage(1);
       setIsFinished(false);
       setError(null);
@@ -40,8 +40,6 @@ const SelectionModal: React.FC<SelectionModalProps> = ({ isOpen, onClose, title,
       setCategoryFilter('');
     }
   }, [isOpen]);
-
-  if (!isOpen) return null;
 
   const safeLeads = leads || [];
   const availableCategories = useMemo(() => {
@@ -59,6 +57,8 @@ const SelectionModal: React.FC<SelectionModalProps> = ({ isOpen, onClose, title,
   const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;
   const pageLeads = filteredLeads.slice(startIdx, startIdx + ITEMS_PER_PAGE);
   const allSelected = filteredLeads.every(l => selectedIds.has(l.apollo_id));
+
+  if (!isOpen) return null;
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
