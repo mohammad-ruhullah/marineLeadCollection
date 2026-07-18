@@ -55,7 +55,7 @@ Job Title: ${title}`;
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.1, maxOutputTokens: 10 }
       },
-      timeout: 8000
+      timeout: 15000
     });
 
     const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim().toUpperCase() || '';

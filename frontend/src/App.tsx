@@ -253,6 +253,7 @@ function App() {
         onSave={handleSaveLeads}
         isSaving={isSaving}
         saveResult={saveResult}
+        existingCategories={[...new Set(leads.map(l => l.category).filter(Boolean))] as string[]}
       />
     </div>
   );

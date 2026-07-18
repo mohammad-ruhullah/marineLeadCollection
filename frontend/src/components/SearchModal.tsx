@@ -23,6 +23,7 @@ interface SearchModalProps {
   onSave: (selectedLeads: PreviewLead[], category: string) => void;
   isSaving: boolean;
   saveResult: { success: boolean; total_saved: number } | null;
+  existingCategories?: string[];
 }
 
 const ITEMS_PER_PAGE = 50;
@@ -33,7 +34,8 @@ const SearchModal: React.FC<SearchModalProps> = ({
   previewData,
   onSave,
   isSaving,
-  saveResult
+  saveResult,
+  existingCategories = []
 }) => {
   const [category, setCategory] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -151,6 +153,9 @@ const SearchModal: React.FC<SearchModalProps> = ({
               <datalist id="category-options">
                 <option value="A" />
                 <option value="B" />
+                {existingCategories.filter(c => c !== 'A' && c !== 'B').map(c => (
+                  <option key={c} value={c} />
+                ))}
               </datalist>
             </div>
             <div className="flex items-center space-x-2 pt-5">
