@@ -71,7 +71,6 @@ router.post('/apollo/preview', validateApolloConfig, async (req, res) => {
           ...filters,
           page: page,
           per_page: perPage,
-          q_organization_name: "ship OR marine OR maritime OR offshore OR tanker OR fleet OR vessel OR shipping OR ferry OR tug OR supply",
           contact_email_status_v2: ["verified"]
         }
       });
@@ -326,7 +325,6 @@ router.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
           ...filters,
           page: page,
           per_page: perPage,
-          q_organization_name: "ship OR marine OR maritime OR offshore OR tanker OR fleet OR vessel OR shipping OR ferry OR tug OR supply",
           contact_email_status_v2: ["verified"]
         }
       });
