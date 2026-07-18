@@ -44,6 +44,7 @@ const SelectionModal: React.FC<SelectionModalProps> = ({ isOpen, onClose, title,
   if (!isOpen) return null;
 
   const availableCategories = useMemo(() => {
+    if (!leads || leads.length === 0) return [];
     const cats = leads.map(l => l.category).filter(Boolean) as string[];
     return Array.from(new Set(cats)).sort();
   }, [leads]);
