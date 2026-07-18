@@ -32,7 +32,7 @@ const SelectionModal: React.FC<SelectionModalProps> = ({ isOpen, onClose, title,
 
   useEffect(() => {
     if (isOpen) {
-      setSelectedIds(new Set(leads.map(l => l.apollo_id)));
+      setSelectedIds(new Set(safeLeads.map(l => l.apollo_id)));
       setCurrentPage(1);
       setIsFinished(false);
       setError(null);
@@ -43,16 +43,17 @@ const SelectionModal: React.FC<SelectionModalProps> = ({ isOpen, onClose, title,
 
   if (!isOpen) return null;
 
+  const safeLeads = leads || [];
   const availableCategories = useMemo(() => {
-    if (!leads || leads.length === 0) return [];
-    const cats = leads.map(l => l.category).filter(Boolean) as string[];
+    if (!safeLeads.length) return [];
+    const cats = safeLeads.map(l => l.category).filter(Boolean) as string[];
     return Array.from(new Set(cats)).sort();
-  }, [leads]);
+  }, [safeLeads]);
 
   const filteredLeads = useMemo(() => {
-    if (!categoryFilter) return leads;
-    return leads.filter(l => l.category === categoryFilter);
-  }, [leads, categoryFilter]);
+    if (!categoryFilter) return safeLeads;
+    return safeLeads.filter(l => l.category === categoryFilter);
+  }, [safeLeads, categoryFilter]);
 
   const totalPages = Math.ceil(filteredLeads.length / ITEMS_PER_PAGE);
   const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -138,9 +139,9 @@ const SelectionModal: React.FC<SelectionModalProps> = ({ isOpen, onClose, title,
           <div>
             <h3 className="text-xl font-bold text-gray-800">{title}</h3>
             <p className="text-sm text-gray-500 mt-1">
-              {filteredLeads.length === leads.length
-                ? `${leads.length} leads available`
-                : `${filteredLeads.length} of ${leads.length} leads`}
+              {filteredLeads.length === safeLeads.length
+                ? `${safeLeads.length} leads available`
+                : `${filteredLeads.length} of ${safeLeads.length} leads`}
             </p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-6 h-6" /></button>
