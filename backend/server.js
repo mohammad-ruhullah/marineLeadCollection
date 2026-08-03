@@ -589,9 +589,29 @@ router.post('/settings', async (req, res) => {
       return res.status(400).json({ error: 'Type and value are required' });
     }
 
+    const trimmedValue = value.trim();
+    if (!trimmedValue) {
+      return res.status(400).json({ error: 'Value cannot be empty' });
+    }
+
+    const { data: existing, error: checkError } = await supabase
+      .from('settings')
+      .select('id')
+      .eq('category', type)
+      .ilike('value', trimmedValue);
+
+    if (checkError) {
+      console.error('Settings duplicate check error:', checkError.message);
+      return res.status(500).json({ error: checkError.message });
+    }
+
+    if (existing && existing.length > 0) {
+      return res.status(409).json({ error: `This option already exists: "${trimmedValue}"` });
+    }
+
     const payload = { 
       category: type,
-      value: value 
+      value: trimmedValue 
     };
 
     console.log('--- DEBUG: Inserting setting into category column:', payload);

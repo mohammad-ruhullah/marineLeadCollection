@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apolloApi } from '../services/api';
-import { Plus, Trash2, Settings, Globe, Briefcase, Tag, AlertCircle, X } from 'lucide-react';
+import { Plus, Trash2, Settings, Globe, Briefcase, Tag, AlertCircle, X, CheckCircle2 } from 'lucide-react';
 
 interface Setting {
   id: number;
@@ -14,6 +14,7 @@ const AdminSettings: React.FC = () => {
   const [newValue, setNewValue] = useState('');
   const [newType, setNewType] = useState<'country' | 'title' | 'keyword' | 'exclude_title'>('country');
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const fetchSettings = async () => {
     setLoading(true);
@@ -39,10 +40,13 @@ const AdminSettings: React.FC = () => {
     try {
       await apolloApi.addSetting(newType, newValue.trim());
       setNewValue('');
+      setError(null);
+      setSuccess(`"${newValue.trim()}" added successfully.`);
       fetchSettings();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error adding setting:', err);
-      setError('Failed to add setting.');
+      setError(err.response?.data?.error || err.message || 'Failed to add setting.');
+      setSuccess(null);
     }
   };
 
@@ -106,6 +110,14 @@ const AdminSettings: React.FC = () => {
           <AlertCircle className="w-5 h-5" />
           <span className="font-medium">{error}</span>
           <button onClick={() => setError(null)} className="ml-auto font-bold underline">Dismiss</button>
+        </div>
+      )}
+
+      {success && (
+        <div className="mb-8 p-4 bg-green-50 border border-green-100 rounded-xl flex items-center space-x-3 text-green-700">
+          <CheckCircle2 className="w-5 h-5" />
+          <span className="font-medium">{success}</span>
+          <button onClick={() => setSuccess(null)} className="ml-auto font-bold underline">Dismiss</button>
         </div>
       )}
 
