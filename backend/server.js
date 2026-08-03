@@ -81,7 +81,21 @@ router.post('/apollo/preview', validateApolloConfig, async (req, res) => {
         break;
       }
 
-      const personIds = people.map(p => p.id);
+      const excludedKeywords = (filters.exclude_org_keywords || []).map(k => k.toLowerCase().trim());
+      const filteredPeople = excludedKeywords.length > 0
+        ? people.filter(p => {
+            const orgName = (p.organization?.name || '').toLowerCase();
+            return !excludedKeywords.some(kw => orgName.includes(kw));
+          })
+        : people;
+
+      if (filteredPeople.length === 0) {
+        console.log(`Page ${page}: all ${people.length} leads excluded by company keywords. Skipping.`);
+        page++;
+        continue;
+      }
+
+      const personIds = filteredPeople.map(p => p.id);
       const { data: existingLeads, error: checkError } = await supabase
         .from('leads')
         .select('apollo_id')
@@ -90,7 +104,7 @@ router.post('/apollo/preview', validateApolloConfig, async (req, res) => {
       if (checkError) console.error('Error checking existing leads:', checkError);
       const existingIds = new Set((existingLeads || []).map(l => l.apollo_id));
 
-      const newPeople = people.filter(p => !existingIds.has(p.id));
+      const newPeople = filteredPeople.filter(p => !existingIds.has(p.id));
       console.log(`Page ${page}: ${newPeople.length} new out of ${people.length} (${existingIds.size} skipped)`);
 
       for (const person of newPeople) {
@@ -330,8 +344,16 @@ router.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
       });
 
       const people = searchResponse.data.people || [];
-      const personIds = people.map(p => p.id);
-      
+      const excludedKeywords = (filters.exclude_org_keywords || []).map(k => k.toLowerCase().trim());
+      const filteredPeople = excludedKeywords.length > 0
+        ? people.filter(p => {
+            const orgName = (p.organization?.name || '').toLowerCase();
+            return !excludedKeywords.some(kw => orgName.includes(kw));
+          })
+        : people;
+
+      const personIds = filteredPeople.map(p => p.id);
+
       if (personIds.length === 0) {
         console.log('No more leads from Apollo. Stopping.');
         break;
@@ -594,6 +616,7 @@ router.get('/settings', async (req, res) => {
       countries: data.filter(s => getField(s, 'type', 'category') === 'country').map(s => s.value),
       titles: data.filter(s => getField(s, 'type', 'category') === 'title').map(s => s.value),
       excludeTitles: data.filter(s => getField(s, 'type', 'category') === 'exclude_title').map(s => s.value),
+      excludeKeywords: data.filter(s => getField(s, 'type', 'category') === 'exclude_keyword').map(s => s.value),
       keywords: data.filter(s => getField(s, 'type', 'category') === 'keyword').map(s => s.value),
       raw: data.map(s => ({ ...s, type: getField(s, 'type', 'category') }))
     };

@@ -10,6 +10,7 @@ interface Settings {
   countries: string[];
   titles: string[];
   excludeTitles: string[];
+  excludeKeywords: string[];
   keywords: string[];
 }
 
@@ -136,10 +137,11 @@ const MultiSelect = ({
 };
 
 const FilterSidebar: React.FC<FilterSidebarProps> = ({ onFilterChange }) => {
-  const [settings, setSettings] = useState<Settings>({ countries: [], titles: [], excludeTitles: [], keywords: [] });
+  const [settings, setSettings] = useState<Settings>({ countries: [], titles: [], excludeTitles: [], excludeKeywords: [], keywords: [] });
   const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
   const [selectedTitles, setSelectedTitles] = useState<string[]>([]);
   const [selectedExcludeTitles, setSelectedExcludeTitles] = useState<string[]>([]);
+  const [selectedExcludeKeywords, setSelectedExcludeKeywords] = useState<string[]>([]);
   const [selectedKeywords, setSelectedKeywords] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -155,6 +157,7 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ onFilterChange }) => {
           countries: data.countries || [],
           titles: data.titles || [],
           excludeTitles: data.excludeTitles || [],
+          excludeKeywords: data.excludeKeywords || [],
           keywords: data.keywords || []
         };
         
@@ -173,11 +176,12 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ onFilterChange }) => {
     if (selectedCountries.length > 0) filters.person_locations = selectedCountries;
     if (selectedTitles.length > 0) filters.person_titles = selectedTitles;
     if (selectedExcludeTitles.length > 0) filters.person_not_titles = selectedExcludeTitles;
+    if (selectedExcludeKeywords.length > 0) filters.exclude_org_keywords = selectedExcludeKeywords;
     if (selectedKeywords.length > 0) filters.organization_keyword_tags = selectedKeywords;
     
     console.log('Filters updated and synced to App:', filters);
     onFilterChange(filters);
-  }, [selectedCountries, selectedTitles, selectedExcludeTitles, selectedKeywords]);
+  }, [selectedCountries, selectedTitles, selectedExcludeTitles, selectedExcludeKeywords, selectedKeywords]);
 
   if (loading) return <div className="p-6 text-gray-500">Loading filters...</div>;
 
@@ -206,6 +210,13 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ onFilterChange }) => {
           options={settings.excludeTitles} 
           selected={selectedExcludeTitles} 
           setSelected={setSelectedExcludeTitles}
+          variant="danger"
+        />
+        <MultiSelect 
+          label="Exclude Company Keywords" 
+          options={settings.excludeKeywords} 
+          selected={selectedExcludeKeywords} 
+          setSelected={setSelectedExcludeKeywords}
           variant="danger"
         />
         <MultiSelect 

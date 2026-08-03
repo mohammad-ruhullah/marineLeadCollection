@@ -4,7 +4,7 @@ import { Plus, Trash2, Settings, Globe, Briefcase, Tag, AlertCircle, X, CheckCir
 
 interface Setting {
   id: number;
-  type: 'country' | 'title' | 'keyword' | 'exclude_title';
+  type: 'country' | 'title' | 'keyword' | 'exclude_title' | 'exclude_keyword';
   value: string;
 }
 
@@ -12,7 +12,7 @@ const AdminSettings: React.FC = () => {
   const [settings, setSettings] = useState<Setting[]>([]);
   const [loading, setLoading] = useState(true);
   const [newValue, setNewValue] = useState('');
-  const [newType, setNewType] = useState<'country' | 'title' | 'keyword' | 'exclude_title'>('country');
+  const [newType, setNewType] = useState<'country' | 'title' | 'keyword' | 'exclude_title' | 'exclude_keyword'>('country');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -137,6 +137,7 @@ const AdminSettings: React.FC = () => {
             <option value="title">Job Title</option>
             <option value="exclude_title">Exclude Job Title</option>
             <option value="keyword">Keyword</option>
+            <option value="exclude_keyword">Exclude Keyword</option>
           </select>
           <input
             type="text"
@@ -184,6 +185,12 @@ const AdminSettings: React.FC = () => {
             icon={Tag} 
             title="Keywords" 
             colorClass="bg-green-50 text-green-700"
+          />
+          <SettingGroup 
+            type="exclude_keyword" 
+            icon={AlertCircle} 
+            title="Exclude Keywords" 
+            colorClass="bg-orange-50 text-orange-700"
           />
         </div>
       )}
