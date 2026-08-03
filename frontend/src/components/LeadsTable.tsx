@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { ExternalLink, Linkedin, Globe, Mail, Search as SearchIcon, Download, Shield, ShieldAlert, ShieldCheck, ChevronDown } from 'lucide-react';
+import { ExternalLink, Linkedin, Globe, Mail, Search as SearchIcon, Download, Shield, ShieldAlert, ShieldCheck, ChevronDown, Trash2 } from 'lucide-react';
 import SelectionModal from './SelectionModal';
 import { apolloApi } from '../services/api';
 
@@ -122,6 +122,7 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isSelectionModalOpen, setIsSelectionModalOpen] = useState(false);
   const [selectionModalMode, setSelectionModalMode] = useState<'enrich' | 'verify'>('enrich');
 
@@ -203,7 +204,30 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
+    setSelectedIds(new Set());
   }, [searchTerm, selectedCountries, selectedRoles, selectedStatuses, selectedCategories]);
+
+  const toggleSelectLead = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleDelete = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    const confirmed = window.confirm(`Delete ${ids.length} lead(s)? This will delete them permanently.`);
+    if (!confirmed) return;
+    try {
+      await apolloApi.softDeleteLeads(ids);
+      setSelectedIds(new Set());
+      onRefresh();
+    } catch (err) {
+      console.error('Error deleting leads:', err);
+      alert('Failed to delete leads. Please check console.');
+    }
+  };
 
   const handleVerify = () => {
     if (stats.pendingVerification === 0) {
@@ -442,6 +466,15 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
           </div>
           
           <div className="flex items-center space-x-3 w-full lg:w-auto">
+            {selectedIds.size > 0 && (
+              <button
+                onClick={() => handleDelete(Array.from(selectedIds))}
+                className="flex-1 lg:flex-none flex items-center justify-center space-x-2 px-6 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-all shadow-md active:transform active:scale-95 whitespace-nowrap"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete Selected ({selectedIds.size})</span>
+              </button>
+            )}
             <button
               onClick={downloadCSV}
               disabled={filteredLeads.length === 0}
@@ -522,6 +555,17 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-gray-50/50 border-b border-gray-100">
+                <th className="px-6 py-5 w-10">
+                  <input
+                    type="checkbox"
+                    checked={filteredLeads.length > 0 && filteredLeads.every(l => selectedIds.has(l.id))}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedIds(new Set(filteredLeads.map(l => l.id)));
+                      else setSelectedIds(new Set());
+                    }}
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                </th>
                 <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-widest">Company</th>
                 <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-widest">Contact</th>
                 <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-widest">Email / Status</th>
@@ -534,6 +578,14 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
             <tbody className="divide-y divide-gray-50">
               {paginatedLeads.map((lead) => (
                 <tr key={lead.id} className="hover:bg-blue-50/30 transition-colors group">
+                  <td className="px-6 py-5 w-10">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(lead.id)}
+                      onChange={() => toggleSelectLead(lead.id)}
+                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                  </td>
                   <td className="px-6 py-5 whitespace-nowrap">
                     <div className="font-bold text-gray-900 group-hover:text-blue-700 transition-colors">
                       {lead.company}
@@ -574,6 +626,13 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
                       <button className="hover:text-blue-600 transition-colors">
                         <ExternalLink className="w-4 h-4" />
                       </button>
+                      <button
+                        onClick={() => handleDelete([lead.id])}
+                        title="Delete lead"
+                        className="hover:text-red-600 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </td>
                   <td className="px-6 py-5 whitespace-nowrap text-right text-xs font-bold text-gray-400 uppercase">
@@ -585,7 +644,7 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
               ))}
               {filteredLeads.length === 0 && leads.length > 0 && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center text-gray-400 italic font-medium">
+                  <td colSpan={8} className="px-6 py-16 text-center text-gray-400 italic font-medium">
                     No results found for "{searchTerm}"
                   </td>
                 </tr>

@@ -31,6 +31,10 @@ export const apolloApi = {
     const response = await axios.get(`${API_BASE_URL}/leads`);
     return response.data;
   },
+  softDeleteLeads: async (ids: string[]) => {
+    const response = await axios.post(`${API_BASE_URL}/leads/soft-delete`, { ids });
+    return response.data;
+  },
   addSetting: async (type: string, value: string) => {
     const response = await axios.post(`${API_BASE_URL}/settings`, { type, value });
     return response.data;

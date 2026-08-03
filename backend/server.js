@@ -533,6 +533,7 @@ router.get('/leads', async (req, res) => {
       const { data, error } = await supabase
         .from('leads')
         .select('*')
+        .neq('status', 'Deleted')
         .range(start, start + pageSize - 1);
 
       if (error) throw error;
@@ -555,6 +556,28 @@ router.get('/leads', async (req, res) => {
   } catch (error) {
     console.error('Fetch leads error:', error.message);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Soft-delete leads: keeps the row in DB but marks it Deleted so it's never shown or re-fetched
+router.post('/leads/soft-delete', async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'No lead IDs provided' });
+    }
+
+    const { error } = await supabase
+      .from('leads')
+      .update({ status: 'Deleted' })
+      .in('id', ids);
+
+    if (error) throw error;
+    console.log(`Soft-deleted ${ids.length} leads.`);
+    res.json({ success: true, deleted: ids.length });
+  } catch (error) {
+    console.error('Soft delete leads error:', error.message);
+    res.status(500).json({ error: error.message || 'Failed to delete leads' });
   }
 });
 
