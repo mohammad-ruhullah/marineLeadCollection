@@ -154,7 +154,8 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
       total: leads.length,
       haveEmail: hasEmail,
       pendingEmail: pendingEmail,
-      invalid: leads.filter(l => l.status === 'Invalid' || l.status === 'No Result Found').length,
+      invalid: leads.filter(l => l.status === 'Invalid').length,
+      noResult: leads.filter(l => l.status === 'No Result Found').length,
       pendingVerification: leads.filter(l => l.status === 'Not Verified').length,
       verified: leads.filter(l => l.status === 'Verified').length
     };
@@ -330,7 +331,7 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
   return (
     <div className="space-y-8">
       {/* Stats Dashboard */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center space-x-4">
           <div className="p-3 bg-blue-50 rounded-xl">
             <Mail className="w-5 h-5 text-blue-600" />
@@ -356,6 +357,15 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
           <div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Invalid</p>
             <p className="text-xl font-black text-gray-900">{stats.invalid}</p>
+          </div>
+        </div>
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center space-x-4">
+          <div className="p-3 bg-gray-50 rounded-xl">
+            <Shield className="w-5 h-5 text-gray-500" />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">No Result Found</p>
+            <p className="text-xl font-black text-gray-900">{stats.noResult}</p>
           </div>
         </div>
       </div>
