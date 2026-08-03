@@ -109,15 +109,21 @@ router.post('/apollo/preview', validateApolloConfig, async (req, res) => {
 
       for (const person of newPeople) {
         if (collected.length >= targetLeads) break;
-        const classification = await classifyLead(person.title, person.organization?.name || '');
+        const org = person.organization || {};
+        const classification = await classifyLead(person.title, org.name || '', {
+          industry: org.industry,
+          tags: org.tags,
+          website: org.website_url
+        });
         collected.push({
           apollo_id: person.id,
           name: `${person.first_name || ''} ${(person.last_name_obfuscated || '').replace('***', '')}`.trim() || person.name || '',
           title: person.title,
-          company: person.organization?.name || 'Unknown',
-          country: person.country || person.organization?.country || 'Unknown',
+          company: org.name || 'Unknown',
+          country: person.country || org.country || 'Unknown',
           is_marine: classification.is_marine,
-          classification_source: classification.source
+          classification_source: classification.source,
+          description: classification.description || ''
         });
       }
 

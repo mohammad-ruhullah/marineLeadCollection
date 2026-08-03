@@ -9,6 +9,7 @@ interface PreviewLead {
   country: string;
   is_marine: boolean;
   classification_source: string;
+  description?: string;
 }
 
 interface SearchModalProps {
@@ -219,6 +220,9 @@ const SearchModal: React.FC<SearchModalProps> = ({
                   </td>
                   <td className="px-4 py-3">
                     <div className="text-sm text-gray-700">{lead.company}</div>
+                    {lead.description && (
+                      <div className="text-xs text-gray-400 italic truncate max-w-[220px]">{lead.description}</div>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="text-sm text-gray-600">{lead.country}</div>

@@ -38,13 +38,23 @@ function classifyByRules(title, company) {
   return false;
 }
 
-async function classifyByGemini(title, company) {
+async function classifyByGemini(title, company, orgMeta = {}) {
   if (!GEMINI_API_KEY) return null;
 
-  const prompt = `You are a marine industry classifier. Reply ONLY with "YES" or "NO". Is the following company in the marine, shipping, or maritime industry?
+  const industry = orgMeta.industry || 'unknown';
+  const tags = Array.isArray(orgMeta.tags) && orgMeta.tags.length > 0 ? orgMeta.tags.join(', ') : 'none';
+  const website = orgMeta.website || 'unknown';
+
+  const prompt = `You are a marine industry classifier. Reply with exactly two lines.
+
+Line 1: a one-line (max 10 words) summary of what this company does, based on your knowledge.
+Line 2: YES or NO — does this company operate in the marine, shipping, or maritime industry? Base your answer on the company description above AND the job title.
 
 Company: ${company}
-Job Title: ${title}`;
+Job Title: ${title}
+Industry: ${industry}
+Keyword tags: ${tags}
+Website: ${website}`;
 
   try {
     const response = await axios({
@@ -53,28 +63,47 @@ Job Title: ${title}`;
       headers: { 'Content-Type': 'application/json' },
       data: {
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 10 }
+        generationConfig: { temperature: 0.1, maxOutputTokens: 80 }
       },
       timeout: 15000
     });
 
-    const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim().toUpperCase() || '';
-    return text === 'YES' ? true : text === 'NO' ? false : null;
+    const raw = response.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+    if (!raw) return null;
+
+    const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+    const lastLine = lines[lines.length - 1] || '';
+    const verdict = lastLine.toUpperCase();
+
+    let isMarine = null;
+    if (verdict === 'YES') isMarine = true;
+    else if (verdict === 'NO') isMarine = false;
+    else {
+      const yesIdx = raw.indexOf('YES');
+      const noIdx = raw.indexOf('NO');
+      if (yesIdx !== -1 && (noIdx === -1 || yesIdx < noIdx)) isMarine = true;
+      else if (noIdx !== -1) isMarine = false;
+    }
+
+    if (isMarine === null) return null;
+
+    const description = lines.slice(0, -1).join(' ').replace(/^Line 1:\s*/i, '');
+    return { is_marine: isMarine, description };
   } catch (err) {
     console.error('Gemini API error:', err.message);
     return null;
   }
 }
 
-async function classifyLead(title, company) {
+async function classifyLead(title, company, orgMeta = {}) {
   if (GEMINI_API_KEY) {
-    const geminiResult = await classifyByGemini(title, company);
+    const geminiResult = await classifyByGemini(title, company, orgMeta);
     if (geminiResult !== null) {
-      return { is_marine: geminiResult, source: 'ai' };
+      return { is_marine: geminiResult.is_marine, source: 'ai', description: geminiResult.description || '' };
     }
   }
   const rulesResult = classifyByRules(title, company);
-  return { is_marine: rulesResult, source: 'rules' };
+  return { is_marine: rulesResult, source: 'rules', description: '' };
 }
 
 module.exports = { classifyLead, classifyByRules };
