@@ -223,7 +223,7 @@ const SearchModal: React.FC<SearchModalProps> = ({
                     <div className="text-sm text-gray-700">{lead.company}</div>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="text-sm text-gray-500 truncate max-w-[240px]">{lead.description || '—'}</div>
+                    <div className="text-sm text-gray-500 break-words">{lead.description || '—'}</div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="text-sm text-gray-600">{lead.country}</div>
