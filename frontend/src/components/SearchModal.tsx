@@ -183,6 +183,7 @@ const SearchModal: React.FC<SearchModalProps> = ({
             <thead className="bg-gray-50 sticky top-0">
               <tr className="border-b border-gray-100">
                 <th className="px-4 py-3 w-10"></th>
+                <th className="px-4 py-3 w-12 text-xs font-bold text-gray-500 uppercase tracking-wider">#</th>
                 <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Name</th>
                 <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Title</th>
                 <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Company</th>
@@ -191,7 +192,7 @@ const SearchModal: React.FC<SearchModalProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {pageLeads.map(lead => (
+              {pageLeads.map((lead, index) => (
                 <tr
                   key={lead.apollo_id}
                   className={`hover:bg-gray-50 transition-colors cursor-pointer ${
@@ -206,6 +207,9 @@ const SearchModal: React.FC<SearchModalProps> = ({
                       onChange={() => toggleSelect(lead.apollo_id)}
                       className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
+                  </td>
+                  <td className="px-4 py-3 text-sm font-bold text-gray-400">
+                    {(currentPage - 1) * ITEMS_PER_PAGE + index + 1}
                   </td>
                   <td className="px-4 py-3">
                     <div className="text-sm font-bold text-gray-800">{lead.name}</div>
