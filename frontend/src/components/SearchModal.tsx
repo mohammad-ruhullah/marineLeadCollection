@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, CheckCircle2, Loader2, ChevronLeft, ChevronRight, Sparkles, AlertCircle } from 'lucide-react';
 
 interface PreviewLead {
@@ -79,8 +79,6 @@ const SearchModal: React.FC<SearchModalProps> = ({
   if (!previewData) return null;
 
   const leads = previewData.leads;
-  const marineCount = leads.filter(l => l.is_marine).length;
-  const nonMarineCount = leads.length - marineCount;
   const totalPages = Math.ceil(leads.length / ITEMS_PER_PAGE);
   const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;
   const pageLeads = leads.slice(startIdx, startIdx + ITEMS_PER_PAGE);

@@ -28,11 +28,7 @@ const VerificationModal: React.FC<VerificationModalProps> = ({ isOpen, onClose, 
     setError(null);
 
     try {
-      // Calculate how many more to verify in this specific batch
-      const remaining = totalPending - currentProcessed;
-      const currentLimit = Math.min(batchSize, remaining);
-      
-      const result = await apolloApi.verifyLeads(currentLimit);
+      const result = await apolloApi.verifyLeads();
       
       if (result.success) {
         const nextProcessed = currentProcessed + (result.processed || 0);

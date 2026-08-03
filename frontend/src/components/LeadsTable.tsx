@@ -5,6 +5,7 @@ import { apolloApi } from '../services/api';
 
 interface Lead {
   id: string;
+  apollo_id: string;
   company: string;
   contact_name: string;
   title: string;
@@ -121,7 +122,6 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
-  const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
   const [isSelectionModalOpen, setIsSelectionModalOpen] = useState(false);
   const [selectionModalMode, setSelectionModalMode] = useState<'enrich' | 'verify'>('enrich');
 
@@ -460,8 +460,8 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
         onClose={() => { setIsSelectionModalOpen(false); onRefresh(); }}
         title={selectionModalMode === 'enrich' ? 'Email Enrichment' : 'Email Verification'}
         leads={selectionModalMode === 'enrich'
-          ? leads.filter(l => l.status === 'Not Enriched').map(l => ({ ...l, contact_name: l.contact_name }))
-          : leads.filter(l => l.status === 'Not Verified').map(l => ({ ...l, contact_name: l.contact_name }))
+          ? leads.filter(l => l.status === 'Not Enriched').map(l => ({ ...l, apollo_id: l.apollo_id, contact_name: l.contact_name }))
+          : leads.filter(l => l.status === 'Not Verified').map(l => ({ ...l, apollo_id: l.apollo_id, contact_name: l.contact_name }))
         }
         actionLabel={selectionModalMode === 'enrich' ? 'Enrich Selected' : 'Verify Selected'}
         onAction={handleSelectionAction}
