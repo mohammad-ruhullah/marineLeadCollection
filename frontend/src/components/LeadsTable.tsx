@@ -4,7 +4,6 @@ import SelectionModal from './SelectionModal';
 import { apolloApi } from '../services/api';
 
 interface Lead {
-  id: string;
   apollo_id: string;
   company: string;
   contact_name: string;
@@ -558,9 +557,9 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
                 <th className="px-6 py-5 w-10">
                   <input
                     type="checkbox"
-                    checked={filteredLeads.length > 0 && filteredLeads.every(l => selectedIds.has(l.id))}
+                    checked={filteredLeads.length > 0 && filteredLeads.every(l => selectedIds.has(l.apollo_id))}
                     onChange={(e) => {
-                      if (e.target.checked) setSelectedIds(new Set(filteredLeads.map(l => l.id)));
+                      if (e.target.checked) setSelectedIds(new Set(filteredLeads.map(l => l.apollo_id)));
                       else setSelectedIds(new Set());
                     }}
                     className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
@@ -577,12 +576,12 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
             </thead>
             <tbody className="divide-y divide-gray-50">
               {paginatedLeads.map((lead) => (
-                <tr key={lead.id} className="hover:bg-blue-50/30 transition-colors group">
+                <tr key={lead.apollo_id} className="hover:bg-blue-50/30 transition-colors group">
                   <td className="px-6 py-5 w-10">
                     <input
                       type="checkbox"
-                      checked={selectedIds.has(lead.id)}
-                      onChange={() => toggleSelectLead(lead.id)}
+                      checked={selectedIds.has(lead.apollo_id)}
+                      onChange={() => toggleSelectLead(lead.apollo_id)}
                       className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                   </td>
@@ -627,7 +626,7 @@ const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filt
                         <ExternalLink className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => handleDelete([lead.id])}
+                        onClick={() => handleDelete([lead.apollo_id])}
                         title="Delete lead"
                         className="hover:text-red-600 transition-colors"
                       >

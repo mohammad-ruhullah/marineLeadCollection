@@ -570,7 +570,7 @@ router.post('/leads/soft-delete', async (req, res) => {
     const { error } = await supabase
       .from('leads')
       .update({ status: 'Deleted' })
-      .in('id', ids);
+      .in('apollo_id', ids);
 
     if (error) throw error;
     console.log(`Soft-deleted ${ids.length} leads.`);
