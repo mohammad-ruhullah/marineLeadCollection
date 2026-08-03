@@ -188,6 +188,7 @@ const SearchModal: React.FC<SearchModalProps> = ({
                 <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Name</th>
                 <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Title</th>
                 <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Company</th>
+                <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Company Summary</th>
                 <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Country</th>
                 <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Marine</th>
               </tr>
@@ -220,9 +221,9 @@ const SearchModal: React.FC<SearchModalProps> = ({
                   </td>
                   <td className="px-4 py-3">
                     <div className="text-sm text-gray-700">{lead.company}</div>
-                    {lead.description && (
-                      <div className="text-xs text-gray-400 italic truncate max-w-[220px]">{lead.description}</div>
-                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="text-sm text-gray-500 truncate max-w-[240px]">{lead.description || '—'}</div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="text-sm text-gray-600">{lead.country}</div>
