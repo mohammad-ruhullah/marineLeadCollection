@@ -28,11 +28,13 @@ const marineKeywords = [
 
 const GEMINI_MIN_INTERVAL_MS = 200;
 const GEMINI_MAX_RETRIES = 2;
+const GEMINI_BATCH_SIZE = 40;
+const GEMINI_TIME_BUDGET_MS = 200000;
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 let lastGeminiCall = 0;
 
-async function callGemini(prompt, attempt = 0) {
+async function callGemini(prompt, maxTokens = 80, attempt = 0) {
   const now = Date.now();
   const wait = lastGeminiCall + GEMINI_MIN_INTERVAL_MS - now;
   if (wait > 0) await sleep(wait);
@@ -45,19 +47,122 @@ async function callGemini(prompt, attempt = 0) {
       headers: { 'Content-Type': 'application/json' },
       data: {
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 80 }
+        generationConfig: { temperature: 0.1, maxOutputTokens: maxTokens }
       },
-      timeout: 15000
+      timeout: 20000
     });
   } catch (err) {
     if (err.response?.status === 429 && attempt < GEMINI_MAX_RETRIES) {
       const backoff = (attempt + 1) * 1000;
       console.log(`Gemini rate limited (429). Retrying in ${backoff}ms...`);
       await sleep(backoff);
-      return callGemini(prompt, attempt + 1);
+      return callGemini(prompt, maxTokens, attempt + 1);
     }
     throw err;
   }
+}
+
+const companyKey = (lead) => (lead.company || '').toLowerCase().trim();
+
+const ruleResult = (lead) => ({
+  is_marine: classifyByRules(lead.title, lead.company),
+  source: 'rules',
+  description: ''
+});
+
+function buildBatchPrompt(items) {
+  const sections = items.map((item, i) => {
+    const industry = item.industry || 'unknown';
+    const tags = Array.isArray(item.tags) && item.tags.length > 0 ? item.tags.join(', ') : 'none';
+    const website = item.website || 'unknown';
+    return `${i + 1}. Company: ${item.company}
+Job Title: ${item.title}
+Industry: ${industry}
+Keyword tags: ${tags}
+Website: ${website}`;
+  });
+
+  return `You are a marine industry classifier. Classify each company below.
+
+For each company, reply with exactly ONE line using this format:
+<number>. <one-line max 10 word summary of what the company does> | YES or NO
+
+The YES or NO must answer: does this company operate in the marine, shipping, or maritime industry? Base it on the summary AND the job title. If you don't know a company, answer NO.
+
+${sections.join('\n\n')}`;
+}
+
+function parseBatchResponse(raw, count) {
+  const results = new Array(count).fill(null);
+  const lines = (raw || '').split('\n').map(l => l.trim()).filter(Boolean);
+  for (const line of lines) {
+    const m = line.match(/^(\d+)[.)]?\s*(.*)$/);
+    if (!m) continue;
+    const idx = parseInt(m[1], 10) - 1;
+    if (idx < 0 || idx >= count) continue;
+    const rest = m[2];
+    const sep = rest.lastIndexOf('|');
+    const verdictPart = (sep !== -1 ? rest.slice(sep + 1) : rest).trim().toUpperCase();
+    const description = sep !== -1 ? rest.slice(0, sep).trim() : '';
+    let isMarine = null;
+    if (verdictPart.includes('YES')) isMarine = true;
+    else if (verdictPart.includes('NO')) isMarine = false;
+    if (isMarine !== null) results[idx] = { is_marine: isMarine, description };
+  }
+  return results;
+}
+
+async function classifyByGeminiBatch(items) {
+  if (!GEMINI_API_KEY || items.length === 0) return null;
+
+  try {
+    const response = await callGemini(buildBatchPrompt(items), 2000);
+    const raw = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    if (!raw) return null;
+    return parseBatchResponse(raw, items.length);
+  } catch (err) {
+    console.error('Gemini batch API error:', err.message);
+    return null;
+  }
+}
+
+async function classifyLeads(leads, options = {}) {
+  const batchSize = options.batchSize || GEMINI_BATCH_SIZE;
+  const budgetMs = options.timeBudgetMs !== undefined ? options.timeBudgetMs : GEMINI_TIME_BUDGET_MS;
+  const startTime = options.startedAt || Date.now();
+  const companyCache = new Map();
+  const results = [];
+
+  for (let i = 0; i < leads.length; i += batchSize) {
+    const batch = leads.slice(i, i + batchSize);
+    const budgetLeft = budgetMs - (Date.now() - startTime);
+
+    if (budgetLeft <= 0) {
+      for (const lead of batch) results.push(ruleResult(lead));
+      continue;
+    }
+
+    const unseenIndices = [];
+    batch.forEach((lead, j) => {
+      if (!companyCache.has(companyKey(lead))) unseenIndices.push(j);
+    });
+
+    if (unseenIndices.length > 0) {
+      const unseenLeads = unseenIndices.map(j => batch[j]);
+      const aiResults = await classifyByGeminiBatch(unseenLeads);
+      unseenIndices.forEach((j, u) => {
+        const ai = aiResults && aiResults[u];
+        const res = ai && ai.is_marine !== null && ai.is_marine !== undefined
+          ? { is_marine: ai.is_marine, source: 'ai', description: ai.description || '' }
+          : ruleResult(unseenLeads[u]);
+        companyCache.set(companyKey(unseenLeads[u]), res);
+      });
+    }
+
+    for (const lead of batch) results.push(companyCache.get(companyKey(lead)));
+  }
+
+  return results;
 }
 
 function classifyByRules(title, company) {
@@ -131,4 +236,4 @@ async function classifyLead(title, company, orgMeta = {}) {
   return { is_marine: rulesResult, source: 'rules', description: '' };
 }
 
-module.exports = { classifyLead, classifyByRules };
+module.exports = { classifyLead, classifyByRules, classifyLeads };

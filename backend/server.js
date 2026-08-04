@@ -44,7 +44,7 @@ const validateHunterConfig = (req, res, next) => {
   next();
 };
 
-const { classifyLead } = require('./classifier');
+const { classifyLeads } = require('./classifier');
 
 const router = express.Router();
 
@@ -52,14 +52,15 @@ const router = express.Router();
 router.post('/apollo/preview', validateApolloConfig, async (req, res) => {
   try {
     const { filters, targetLeads = 100 } = req.body;
-    let collected = [];
+    let pending = [];
     const perPage = 100;
     const MAX_SAFE_PAGES = 50;
     let page = 1;
+    const startedAt = Date.now();
 
     console.log(`--- PREVIEW START: targeting ${targetLeads} new leads ---`);
 
-    while (collected.length < targetLeads && page <= MAX_SAFE_PAGES) {
+    while (pending.length < targetLeads && page <= MAX_SAFE_PAGES) {
       const searchResponse = await axios({
         method: 'post',
         url: 'https://api.apollo.io/api/v1/mixed_people/api_search',
@@ -108,27 +109,39 @@ router.post('/apollo/preview', validateApolloConfig, async (req, res) => {
       console.log(`Page ${page}: ${newPeople.length} new out of ${people.length} (${existingIds.size} skipped)`);
 
       for (const person of newPeople) {
-        if (collected.length >= targetLeads) break;
+        if (pending.length >= targetLeads) break;
         const org = person.organization || {};
-        const classification = await classifyLead(person.title, org.name || '', {
-          industry: org.industry,
-          tags: org.tags,
-          website: org.website_url
-        });
-        collected.push({
-          apollo_id: person.id,
-          name: `${person.first_name || ''} ${(person.last_name_obfuscated || '').replace('***', '')}`.trim() || person.name || '',
-          title: person.title,
-          company: org.name || 'Unknown',
-          country: person.country || org.country || 'Unknown',
-          is_marine: classification.is_marine,
-          classification_source: classification.source,
-          description: classification.description || ''
-        });
+        pending.push({ person, org });
       }
 
       page++;
     }
+
+    console.log(`--- CLASSIFYING ${pending.length} leads (batched, time-guarded) ---`);
+
+    const leadsForClassify = pending.map(({ person, org }) => ({
+      title: person.title,
+      company: org.name || '',
+      industry: org.industry,
+      tags: org.tags,
+      website: org.website_url
+    }));
+
+    const classifications = await classifyLeads(leadsForClassify, {
+      startedAt: startedAt,
+      timeBudgetMs: 200000
+    });
+
+    const collected = pending.map(({ person, org }, i) => ({
+      apollo_id: person.id,
+      name: `${person.first_name || ''} ${(person.last_name_obfuscated || '').replace('***', '')}`.trim() || person.name || '',
+      title: person.title,
+      company: org.name || 'Unknown',
+      country: person.country || org.country || 'Unknown',
+      is_marine: classifications[i].is_marine,
+      classification_source: classifications[i].source,
+      description: classifications[i].description || ''
+    }));
 
     const classifierSource = collected.some(l => l.classification_source === 'ai') ? 'ai' : 'rules';
     console.log(`--- PREVIEW END: collected ${collected.length} new leads (classifier: ${classifierSource}) ---`);
