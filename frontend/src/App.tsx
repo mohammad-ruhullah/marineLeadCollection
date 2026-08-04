@@ -7,6 +7,9 @@ import AdminSettings from './components/AdminSettings';
 import { apolloApi } from './services/api';
 import { Search, Database, LayoutGrid, List, Settings } from 'lucide-react';
 
+const MAX_PREVIEW_LEADS = 4500;
+const SAVE_BATCH_SIZE = 100;
+
 function App() {
   const [filters, setFilters] = useState<any>({});
   console.log('App rendering, filters:', filters);
@@ -16,6 +19,7 @@ function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<{ success: boolean; total_saved: number } | null>(null);
   const [targetLeads, setTargetLeads] = useState<string>('');
+  const [capWarning, setCapWarning] = useState<string | null>(null);
   
   const [leads, setLeads] = useState<any[]>([]);
   const [leadsLoading, setLeadsLoading] = useState(true);
@@ -52,6 +56,11 @@ function App() {
       alert('Please enter a valid number of leads to preview.');
       return;
     }
+    if (target > MAX_PREVIEW_LEADS) {
+      setCapWarning(`Maximum is ${MAX_PREVIEW_LEADS.toLocaleString()} leads per preview. Please enter a valid number.`);
+      return;
+    }
+    setCapWarning(null);
 
     setIsCalculating(true);
     setPreviewData(null);
@@ -73,8 +82,13 @@ function App() {
   const handleSaveLeads = async (selectedLeads: any[], category: string) => {
     setIsSaving(true);
     try {
-      const result = await apolloApi.saveLeads(selectedLeads, category);
-      setSaveResult(result);
+      let totalSaved = 0;
+      for (let i = 0; i < selectedLeads.length; i += SAVE_BATCH_SIZE) {
+        const chunk = selectedLeads.slice(i, i + SAVE_BATCH_SIZE);
+        const result = await apolloApi.saveLeads(chunk, category);
+        totalSaved += result.total_saved || 0;
+      }
+      setSaveResult({ success: true, total_saved: totalSaved });
       fetchLeads();
     } catch (error: any) {
       console.error('Error saving leads:', error);
@@ -192,7 +206,7 @@ function App() {
                     <p className="text-gray-600 max-w-lg mx-auto mb-6">
                       Configure your target audience in the sidebar. We'll preview leads before using any credits.
                     </p>
-                    <div className="flex items-center justify-center space-x-4 mb-6">
+                    <div className="flex items-center justify-center space-x-4 mb-2">
                       <label className="text-sm font-semibold text-gray-700">Target Leads:</label>
                       <input
                         type="number"
@@ -201,8 +215,14 @@ function App() {
                         placeholder="e.g. 500"
                         className="w-28 px-3 py-2 border border-gray-300 rounded-lg text-center text-lg font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         min="1"
+                        max={MAX_PREVIEW_LEADS}
                       />
                     </div>
+                    {capWarning ? (
+                      <p className="text-amber-600 text-sm font-semibold mb-4">{capWarning}</p>
+                    ) : (
+                      <p className="text-gray-400 text-xs mb-4">Maximum {MAX_PREVIEW_LEADS.toLocaleString()} leads per preview.</p>
+                    )}
                     <button
                       onClick={handleCalculate}
                       disabled={isCalculating || !parseInt(targetLeads)}

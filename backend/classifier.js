@@ -26,6 +26,40 @@ const marineKeywords = [
   'imtech', 'hatlapa', 'schottel', 'rolls-royce'
 ];
 
+const GEMINI_MIN_INTERVAL_MS = 200;
+const GEMINI_MAX_RETRIES = 2;
+
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+let lastGeminiCall = 0;
+
+async function callGemini(prompt, attempt = 0) {
+  const now = Date.now();
+  const wait = lastGeminiCall + GEMINI_MIN_INTERVAL_MS - now;
+  if (wait > 0) await sleep(wait);
+  lastGeminiCall = Date.now();
+
+  try {
+    return await axios({
+      method: 'post',
+      url: `${GEMINI_URL}?key=${GEMINI_API_KEY}`,
+      headers: { 'Content-Type': 'application/json' },
+      data: {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 80 }
+      },
+      timeout: 15000
+    });
+  } catch (err) {
+    if (err.response?.status === 429 && attempt < GEMINI_MAX_RETRIES) {
+      const backoff = (attempt + 1) * 1000;
+      console.log(`Gemini rate limited (429). Retrying in ${backoff}ms...`);
+      await sleep(backoff);
+      return callGemini(prompt, attempt + 1);
+    }
+    throw err;
+  }
+}
+
 function classifyByRules(title, company) {
   const t = (title || '').toLowerCase().trim();
   const c = (company || '').toLowerCase().trim();
@@ -57,16 +91,7 @@ Keyword tags: ${tags}
 Website: ${website}`;
 
   try {
-    const response = await axios({
-      method: 'post',
-      url: `${GEMINI_URL}?key=${GEMINI_API_KEY}`,
-      headers: { 'Content-Type': 'application/json' },
-      data: {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 80 }
-      },
-      timeout: 15000
-    });
+    const response = await callGemini(prompt);
 
     const raw = response.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
     if (!raw) return null;
