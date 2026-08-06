@@ -112,7 +112,7 @@ const MultiSelectDropdown = ({
   );
 };
 
-const ITEMS_PER_PAGE = 50;
+const ITEMS_PER_PAGE = 100;
 
 const LeadsTable: React.FC<LeadsTableProps> = ({ leads, loading, onRefresh, filters = {} }) => {
   const [searchTerm, setSearchTerm] = useState('');

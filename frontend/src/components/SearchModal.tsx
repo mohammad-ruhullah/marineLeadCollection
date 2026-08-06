@@ -27,7 +27,7 @@ interface SearchModalProps {
   existingCategories?: string[];
 }
 
-const ITEMS_PER_PAGE = 50;
+const ITEMS_PER_PAGE = 100;
 
 const SearchModal: React.FC<SearchModalProps> = ({
   isOpen,

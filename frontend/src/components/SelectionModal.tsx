@@ -19,7 +19,7 @@ interface SelectionModalProps {
   onAction: (ids: string[]) => Promise<{ processed: number } | void>;
 }
 
-const ITEMS_PER_PAGE = 50;
+const ITEMS_PER_PAGE = 100;
 
 const SelectionModal: React.FC<SelectionModalProps> = ({ isOpen, onClose, title, leads, actionLabel, onAction }) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
