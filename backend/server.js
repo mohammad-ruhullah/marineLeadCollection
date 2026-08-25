@@ -180,16 +180,24 @@ router.post('/apollo/save-leads', validateApolloConfig, async (req, res) => {
       category: category || null
     }));
 
+    // Collapse duplicates within this batch. Apollo pagination can return the same
+    // person on more than one page, and a single upsert cannot touch a row twice.
+    const uniqueLeads = [...new Map(
+      leadsToInsert.filter(l => l.apollo_id).map(l => [l.apollo_id, l])
+    ).values()];
+
     // Check for existing leads to avoid overwriting enriched data
-    const ids = leadsToInsert.map(l => l.apollo_id);
+    const ids = uniqueLeads.map(l => l.apollo_id);
     const { data: existingLeads, error: checkError } = await supabase
       .from('leads')
       .select('apollo_id')
       .in('apollo_id', ids);
 
-    if (checkError) console.error('Error checking existing leads:', checkError);
+    // Fail loudly. A failed check leaves existingIds empty, and the upsert below
+    // would then overwrite already-enriched rows with blank emails.
+    if (checkError) throw checkError;
     const existingIds = new Set((existingLeads || []).map(l => l.apollo_id));
-    const trulyNew = leadsToInsert.filter(l => !existingIds.has(l.apollo_id));
+    const trulyNew = uniqueLeads.filter(l => !existingIds.has(l.apollo_id));
 
     if (trulyNew.length === 0) {
       return res.json({ success: true, total_saved: 0 });
@@ -431,14 +439,21 @@ router.post('/apollo/bulk-fetch', validateApolloConfig, async (req, res) => {
             website: person.organization?.website_url || 'N/A',
             linkedin: person.linkedin_url || person.organization?.linkedin_url || '',
             category: category || null
-          })).slice(0, Math.min(matchedPeople.length, remaining));
+          }));
+
+          // Dedupe before slicing so the cap counts distinct leads, not repeats.
+          const uniqueMatched = [...new Map(
+            leadsToUpsert.filter(l => l.apollo_id).map(l => [l.apollo_id, l])
+          ).values()].slice(0, remaining);
+
+          if (uniqueMatched.length === 0) continue;
 
           const { error } = await supabase
             .from('leads')
-            .upsert(leadsToUpsert, { onConflict: 'apollo_id' });
+            .upsert(uniqueMatched, { onConflict: 'apollo_id' });
 
           if (error) throw error;
-          totalSaved += leadsToUpsert.length;
+          totalSaved += uniqueMatched.length;
           console.log(`Saved ${totalSaved}/${maxLeads} leads...`);
           
           if (totalSaved >= maxLeads) break;
