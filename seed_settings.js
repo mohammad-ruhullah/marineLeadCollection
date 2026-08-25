@@ -13,7 +13,13 @@ const countries = [
   "Denmark", "Belgium", "Italy", "France", "Spain", 
   "Iceland", "Poland", "Croatia", "Romania", "Bulgaria", 
   "Malta", "Portugal", "Taiwan", "Indonesia", "Thailand", 
-  "Philippines", "Saudi Arabia", "Qatar", "Oman", "Kuwait"
+  "Philippines", "Saudi Arabia", "Qatar", "Oman", "Kuwait", 
+  "Hong Kong", "Panama", "Brazil", "Mexico", "South Africa", 
+  "Egypt", "Sri Lanka", "Australia", "New Zealand", "Sweden", 
+  "Finland", "Estonia", "Latvia", "Lithuania", "Slovenia", 
+  "Montenegro", "Serbia", "Georgia", "Azerbaijan", "Bahrain", 
+  "Jordan", "Israel", "Morocco", "Tunisia", "Algeria", 
+  "Nigeria", "Ghana"
 ];
 
 const titles = [
@@ -31,14 +37,32 @@ const keywords = [
   "Marine Equipment"
 ];
 
+const keyOf = (category, value) => `${(category || '').toLowerCase()}::${(value || '').toLowerCase().trim()}`;
+
 async function seed() {
   console.log('Starting seed...');
-  
+
+  const { data: existing, error: fetchError } = await supabase
+    .from('settings')
+    .select('category, value');
+
+  if (fetchError) {
+    console.error('Error fetching existing settings:', fetchError);
+    return;
+  }
+
+  const seen = new Set((existing || []).map(s => keyOf(s.category, s.value)));
+
   const dataToInsert = [
     ...countries.map(v => ({ category: 'country', value: v })),
     ...titles.map(v => ({ category: 'title', value: v })),
     ...keywords.map(v => ({ category: 'keyword', value: v }))
-  ];
+  ].filter(item => !seen.has(keyOf(item.category, item.value)));
+
+  if (dataToInsert.length === 0) {
+    console.log('Nothing to insert - all settings already present.');
+    return;
+  }
 
   const { error } = await supabase
     .from('settings')
