@@ -24,6 +24,30 @@ if (SUPABASE_URL && SUPABASE_KEY) {
   console.error('CRITICAL: Supabase environment variables are missing!');
 }
 
+// PostgREST sends .in() filters in the URL query string, and Cloudflare rejects URIs over
+// ~8KB. Chunk id lists so each request stays well under that. This also sidesteps PostgREST's
+// default 1000-row response cap, since every chunk returns at most ID_CHUNK_SIZE rows.
+const ID_CHUNK_SIZE = 100;
+
+const chunk = (arr, size) => {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+};
+
+async function selectLeadsByApolloIds(ids, columns = '*') {
+  const rows = [];
+  for (const batch of chunk(ids, ID_CHUNK_SIZE)) {
+    const { data, error } = await supabase
+      .from('leads')
+      .select(columns)
+      .in('apollo_id', batch);
+    if (error) throw error;
+    if (data) rows.push(...data);
+  }
+  return rows;
+}
+
 const APOLLO_API_KEY = (process.env.APOLLO_API_KEY || '').trim();
 const HUNTER_API_KEY = (process.env.HUNTER_API_KEY || '').trim();
 
@@ -223,12 +247,7 @@ router.post('/apollo/enrich-emails', validateApolloConfig, async (req, res) => {
     let leads;
 
     if (ids && Array.isArray(ids) && ids.length > 0) {
-      const { data, error } = await supabase
-        .from('leads')
-        .select('*')
-        .in('apollo_id', ids);
-      if (error) throw error;
-      leads = data || [];
+      leads = await selectLeadsByApolloIds(ids);
     } else {
       const { data, error } = await supabase
         .from('leads')
@@ -480,12 +499,7 @@ router.post('/apollo/leads/verify', validateHunterConfig, async (req, res) => {
     let leads;
 
     if (ids && Array.isArray(ids) && ids.length > 0) {
-      const { data, error } = await supabase
-        .from('leads')
-        .select('*')
-        .in('apollo_id', ids);
-      if (error) throw error;
-      leads = data || [];
+      leads = await selectLeadsByApolloIds(ids);
     } else {
       const { data, error } = await supabase
         .from('leads')
@@ -623,12 +637,14 @@ router.post('/leads/soft-delete', async (req, res) => {
       return res.status(400).json({ error: 'No lead IDs provided' });
     }
 
-    const { error } = await supabase
-      .from('leads')
-      .update({ status: 'Deleted' })
-      .in('apollo_id', ids);
+    for (const batch of chunk(ids, ID_CHUNK_SIZE)) {
+      const { error } = await supabase
+        .from('leads')
+        .update({ status: 'Deleted' })
+        .in('apollo_id', batch);
+      if (error) throw error;
+    }
 
-    if (error) throw error;
     console.log(`Soft-deleted ${ids.length} leads.`);
     res.json({ success: true, deleted: ids.length });
   } catch (error) {
